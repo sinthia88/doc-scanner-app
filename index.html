@@ -263,6 +263,15 @@
             background-color: var(--btn-secondary-bg);
             color: var(--text-primary);
         }
+        #docsuite-link{
+            color: red;
+            border: 2px solid black; /* thickness | style | color */
+            padding: 10px;
+            width: 100px;
+            margin-bottom: 20px;
+            text-align: center;
+            background: lightblue;
+        }
     </style>
 </head>
 
@@ -272,6 +281,7 @@
         <header class="text-center mb-8">
             <h1 class="text-5xl font-extrabold gradient-text">DocScanner</h1>
             <p class="text-lg text-secondary mt-2">Your powerful, browser-based document scanner.</p>
+            
         </header>
 
         <button id="theme-toggle-btn" class="btn-secondary">
@@ -286,11 +296,13 @@
                     d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
             </svg>
         </button>
+        <h1 id="docsuite-link"><a href="3.html">Docsuite</a></h1>
 
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <!-- Left Column: Input & Controls -->
             <div id="left-column" class="glass-card p-6">
                 <div id="input-view">
+                    
                     <h2 class="text-2xl font-bold mb-4 border-b border-gray-700 pb-2">1. Get Your Image</h2>
                     <div class="flex border border-gray-700 rounded-lg mb-4">
                         <button id="tab-upload" class="tab-button flex-1 p-3 rounded-l-lg font-medium">Upload

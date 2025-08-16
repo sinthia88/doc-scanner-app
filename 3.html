@@ -1,0 +1,1469 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DocSuite - Scanner, Merger, Splitter & Converter</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- PDF-LIB for merging and splitting -->
+    <script src="https://unpkg.com/pdf-lib"></script>
+    <!-- PDF.js for rendering PDF pages -->
+    <script src="https://mozilla.github.io/pdf.js/build/pdf.mjs" type="module"></script>
+    <!-- Draggable library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.11.5/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.11.5/Draggable.min.js"></script>
+    <!-- SortableJS for thumbnails -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+    <!-- JSZip for batch downloads -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        /* Light Theme Variables */
+        :root,
+        [data-theme="light"] {
+            --primary-glow: #4f46e5;
+            --secondary-glow: #d946ef;
+            --bg-start: #f9fafb;
+            --bg-end: #e5e7eb;
+            --card-bg: #ffffff;
+            --text-primary: #111827;
+            --text-secondary: #4b5563;
+            --border-color: #d1d5db;
+            --input-bg: #f3f4f6;
+            --btn-secondary-bg: #e5e7eb;
+            --btn-secondary-hover: #d1d5db;
+        }
+
+        /* Dark Theme Variables */
+        [data-theme="dark"] {
+            --primary-glow: #6366f1;
+            --secondary-glow: #ec4899;
+            --bg-start: #111827;
+            --bg-end: #1f2937;
+            --card-bg: #1f2937;
+            --text-primary: #f9fafb;
+            --text-secondary: #9ca3af;
+            --border-color: #374151;
+            --input-bg: #374151;
+            --btn-secondary-bg: #374151;
+            --btn-secondary-hover: #4b5563;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, var(--bg-start), var(--bg-end));
+            color: var(--text-primary);
+            transition: background 0.3s ease, color 0.3s ease;
+        }
+
+        .corner-handle {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background-color: rgba(99, 102, 241, 0.7);
+            border-radius: 50%;
+            border: 2px solid white;
+            box-shadow: 0 0 15px var(--primary-glow);
+            cursor: move;
+            touch-action: none;
+        }
+
+        .loader {
+            border: 4px solid var(--border-color);
+            border-top: 4px solid var(--primary-glow);
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .tab-button.active,
+        .tool-btn.active,
+        .aspect-btn.active {
+            background-color: var(--primary-glow);
+            color: white;
+            box-shadow: 0 0 10px var(--primary-glow);
+        }
+
+        .thumbnail {
+            border: 3px solid transparent;
+            cursor: grab;
+            transition: all 0.2s ease-in-out;
+            background-color: var(--bg-start);
+        }
+
+        .thumbnail.active {
+            border-color: var(--primary-glow);
+            box-shadow: 0 0 15px var(--primary-glow);
+            transform: scale(1.05);
+        }
+
+        .delete-page-btn {
+            position: absolute;
+            top: -10px;
+            right: -10px;
+            background-color: #ef4444;
+            color: white;
+            border-radius: 50%;
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            cursor: pointer;
+            opacity: 0;
+            transition: opacity 0.2s;
+            border: 2px solid var(--card-bg);
+        }
+
+        .thumbnail:hover .delete-page-btn {
+            opacity: 1;
+        }
+
+        .sortable-ghost {
+            opacity: 0.4;
+        }
+
+        .modal {
+            display: none;
+        }
+
+        .glass-card {
+            background: color-mix(in srgb, var(--card-bg) 70%, transparent);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border-color);
+            border-radius: 1.5rem;
+            transition: background 0.3s ease, border 0.3s ease;
+        }
+
+        .gradient-text {
+            background: linear-gradient(90deg, var(--primary-glow), var(--secondary-glow));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .btn-primary {
+            background: linear-gradient(90deg, var(--primary-glow), var(--secondary-glow));
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px color-mix(in srgb, var(--primary-glow) 40%, transparent);
+        }
+
+        .btn-secondary {
+            background-color: var(--btn-secondary-bg);
+            transition: all 0.3s ease;
+        }
+
+        .btn-secondary:hover {
+            background-color: var(--btn-secondary-hover);
+            transform: translateY(-2px);
+        }
+
+        .accordion-header {
+            width: 100%;
+            text-align: left;
+            padding: 0.75rem 1rem;
+            background-color: var(--btn-secondary-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+            font-weight: 600;
+            transition: all 0.2s;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .accordion-header:hover {
+            background-color: var(--btn-secondary-hover);
+        }
+
+        .accordion-header.active {
+            background-color: var(--primary-glow);
+            color: white;
+            border-bottom-left-radius: 0;
+            border-bottom-right-radius: 0;
+        }
+
+        .accordion-content {
+            display: none;
+            padding: 1rem;
+            background-color: color-mix(in srgb, var(--bg-start) 50%, transparent);
+            border: 1px solid var(--border-color);
+            border-top: none;
+            border-radius: 0 0 0.5rem 0.5rem;
+        }
+
+        .accordion-header .icon::after {
+            content: '+';
+            font-size: 1.5rem;
+            line-height: 1;
+            transition: transform 0.2s;
+        }
+
+        .accordion-header.active .icon::after {
+            transform: rotate(45deg);
+        }
+
+        input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 8px;
+            background: var(--border-color);
+            border-radius: 5px;
+            outline: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            background: var(--primary-glow);
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        input[type="range"]::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            background: var(--primary-glow);
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        #theme-toggle-btn {
+            position: absolute;
+            top: 1.5rem;
+            right: 1.5rem;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            background-color: var(--btn-secondary-bg);
+            color: var(--text-primary);
+        }
+
+        .tool-card {
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .tool-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px color-mix(in srgb, var(--primary-glow) 20%, transparent);
+        }
+    </style>
+</head>
+
+<body data-theme="dark">
+
+    <div class="container mx-auto p-4 max-w-7xl relative">
+        <header class="text-center mb-8">
+            <h1 class="text-5xl font-extrabold gradient-text">DocSuite</h1>
+            <p class="text-lg text-secondary mt-2">Your All-in-One Document Toolkit.</p>
+        </header>
+
+        <button id="theme-toggle-btn" class="btn-secondary">
+            <svg id="theme-icon-sun" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
+                stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+            </svg>
+            <svg id="theme-icon-moon" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 hidden" fill="none"
+                viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+            </svg>
+        </button>
+
+        <!-- Tool Selection View -->
+        <div id="tool-selection-view">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                <!-- Scanner Card -->
+                <div class="tool-card glass-card p-6 flex flex-col items-center text-center cursor-pointer"
+                    data-tool="scanner">
+                    <svg class="h-16 w-16 mb-4 gradient-text" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z">
+                        </path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                    </svg>
+                    <h3 class="text-xl font-bold mb-2">Document Scanner</h3>
+                    <p class="text-secondary">Scan, crop, and enhance images into multi-page documents.</p>
+                </div>
+                <!-- PDF Merger Card -->
+                <div class="tool-card glass-card p-6 flex flex-col items-center text-center cursor-pointer"
+                    data-tool="merger">
+                    <svg class="h-16 w-16 mb-4 gradient-text" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z">
+                        </path>
+                    </svg>
+                    <h3 class="text-xl font-bold mb-2">PDF Merger</h3>
+                    <p class="text-secondary">Combine multiple PDF files into a single, organized document.</p>
+                </div>
+                <!-- PDF Splitter Card -->
+                <div class="tool-card glass-card p-6 flex flex-col items-center text-center cursor-pointer"
+                    data-tool="splitter">
+                    <svg class="h-16 w-16 mb-4 gradient-text" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M14.121 14.121L19 19m-7-7l7-7m-7 7l-2.879 2.879a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414l2.879-2.879m7 7l-7-7">
+                        </path>
+                    </svg>
+                    <h3 class="text-xl font-bold mb-2">PDF Splitter</h3>
+                    <p class="text-secondary">Extract specific pages or page ranges from a PDF file.</p>
+                </div>
+                <!-- PDF to JPG Card -->
+                <div class="tool-card glass-card p-6 flex flex-col items-center text-center cursor-pointer"
+                    data-tool="pdf-to-jpg">
+                    <svg class="h-16 w-16 mb-4 gradient-text" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z">
+                        </path>
+                    </svg>
+                    <h3 class="text-xl font-bold mb-2">PDF to JPG</h3>
+                    <p class="text-secondary">Convert each page of a PDF into a high-quality JPG image.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Scanner View -->
+        <div id="scanner-view" class="hidden">
+            <!-- Populated by the scanner's HTML structure -->
+        </div>
+
+        <!-- PDF Tools View -->
+        <div id="pdf-tools-view" class="hidden glass-card p-6">
+            <button class="back-to-tools-btn btn-secondary text-white font-bold py-2 px-4 rounded-lg mb-4">← Back to
+                Tools</button>
+            <div id="merger-view" class="pdf-tool-view hidden">
+                <h2 class="text-3xl font-bold mb-4 gradient-text">PDF Merger</h2>
+                <label for="merge-files-input"
+                    class="w-full cursor-pointer bg-gray-800 hover:bg-gray-700 border-2 border-dashed border-gray-600 rounded-lg p-8 text-center block transition">
+                    <span class="text-lg font-semibold text-gray-400">Click to select multiple PDF files</span>
+                </label>
+                <input type="file" id="merge-files-input" class="hidden" accept=".pdf" multiple>
+                <ul id="merge-file-list" class="mt-4 space-y-2"></ul>
+                <button id="merge-pdf-btn"
+                    class="w-full mt-4 btn-primary text-white font-bold py-3 px-4 rounded-lg hidden">Merge PDFs</button>
+            </div>
+            <div id="splitter-view" class="pdf-tool-view hidden">
+                <h2 class="text-3xl font-bold mb-4 gradient-text">PDF Splitter</h2>
+                <label for="split-file-input"
+                    class="w-full cursor-pointer bg-gray-800 hover:bg-gray-700 border-2 border-dashed border-gray-600 rounded-lg p-8 text-center block transition">
+                    <span class="text-lg font-semibold text-gray-400">Click to select a PDF file</span>
+                </label>
+                <input type="file" id="split-file-input" class="hidden" accept=".pdf">
+                <div id="split-preview-area" class="mt-4 hidden">
+                    <input type="text" id="split-pages-input"
+                        class="w-full p-2 border bg-gray-800 border-gray-600 rounded-lg text-white mb-2"
+                        placeholder="e.g., 1, 3-5, 8">
+                    <button id="split-pdf-btn"
+                        class="w-full btn-primary text-white font-bold py-3 px-4 rounded-lg">Split PDF</button>
+                    <div id="split-thumbnail-grid" class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-4 mt-4">
+                    </div>
+                </div>
+            </div>
+            <div id="pdf-to-jpg-view" class="pdf-tool-view hidden">
+                <h2 class="text-3xl font-bold mb-4 gradient-text">PDF to JPG Converter</h2>
+                <label for="pdf-to-jpg-input"
+                    class="w-full cursor-pointer bg-gray-800 hover:bg-gray-700 border-2 border-dashed border-gray-600 rounded-lg p-8 text-center block transition">
+                    <span class="text-lg font-semibold text-gray-400">Click to select a PDF file</span>
+                </label>
+                <input type="file" id="pdf-to-jpg-input" class="hidden" accept=".pdf">
+                <button id="convert-pdf-btn"
+                    class="w-full mt-4 btn-primary text-white font-bold py-3 px-4 rounded-lg hidden">Convert to
+                    JPG</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scanner HTML template -->
+    <template id="scanner-template">
+        <button class="back-to-tools-btn btn-secondary text-white font-bold py-2 px-4 rounded-lg mb-4">← Back to
+            Tools</button>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div id="scanner-left-column" class="glass-card p-6">
+                <div id="scanner-input-view">
+                    <h2 class="text-2xl font-bold mb-4 border-b border-gray-700 pb-2">1. Get Your Image</h2>
+                    <div class="flex border border-gray-700 rounded-lg mb-4">
+                        <button id="scanner-tab-upload" class="tab-button flex-1 p-3 rounded-l-lg font-medium">Upload
+                            File</button>
+                        <button id="scanner-tab-camera" class="tab-button flex-1 p-3 rounded-r-lg font-medium">Use
+                            Camera</button>
+                    </div>
+                    <div id="scanner-upload-section">
+                        <label for="scanner-image-upload"
+                            class="w-full cursor-pointer bg-gray-800 hover:bg-gray-700 border-2 border-dashed border-gray-600 rounded-lg p-8 text-center block transition">
+                            <svg class="mx-auto h-12 w-12 text-gray-500" fill="none" viewBox="0 0 24 24"
+                                stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M7 16a4 4 0 01-4-4V6a4 4 0 014-4h6a4 4 0 014 4v6a4 4 0 01-4 4H7z"></path>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2h2"></path>
+                            </svg>
+                            <span class="mt-2 block text-sm font-semibold text-gray-400">Click to upload an image</span>
+                        </label>
+                        <input type="file" id="scanner-image-upload" class="hidden" accept="image/*">
+                    </div>
+                    <div id="scanner-camera-section" class="hidden">
+                        <video id="scanner-video-feed" class="w-full rounded-lg bg-black" playsinline></video>
+                        <div class="flex justify-center space-x-4 mt-4">
+                            <button id="scanner-start-camera"
+                                class="btn-secondary text-white font-bold py-2 px-4 rounded-lg">Start</button>
+                            <button id="scanner-capture-photo"
+                                class="btn-primary text-white font-bold py-2 px-4 rounded-lg" disabled>Capture</button>
+                        </div>
+                    </div>
+                </div>
+                <div id="scanner-controls-section" class="hidden space-y-2">
+                    <h2 class="text-2xl font-bold mb-2">Editing Page <span id="scanner-page-number-display"
+                            class="gradient-text"></span></h2>
+                    <div class="accordion-item">
+                        <button class="accordion-header"><span>Edit & Correct</span><span class="icon"></span></button>
+                        <div class="accordion-content space-y-6">
+                            <div>
+                                <h3 class="text-lg font-semibold mb-2">Page Tools</h3>
+                                <div class="space-y-4">
+                                    <button id="scanner-crop-and-warp"
+                                        class="w-full btn-primary text-white font-bold py-3 px-4 rounded-lg">Crop &
+                                        Straighten</button>
+                                    <button id="scanner-rotate-page"
+                                        class="w-full btn-secondary text-white font-bold py-3 px-4 rounded-lg">Rotate
+                                        Page</button>
+                                </div>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold mb-2">Crop Aspect Ratio</h3>
+                                <div id="scanner-aspect-ratio-btns" class="grid grid-cols-3 gap-2">
+                                    <button data-ratio="free"
+                                        class="aspect-btn btn-secondary text-white p-2 rounded-lg text-sm">Freeform</button>
+                                    <button data-ratio="a4p"
+                                        class="aspect-btn btn-secondary text-white p-2 rounded-lg text-sm">A4
+                                        Port.</button>
+                                    <button data-ratio="a4l"
+                                        class="aspect-btn btn-secondary text-white p-2 rounded-lg text-sm">A4
+                                        Land.</button>
+                                </div>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold mb-2">Document Style</h3>
+                                <div class="grid grid-cols-2 gap-4">
+                                    <button id="scanner-preset-auto-color"
+                                        class="preset-btn btn-secondary text-white font-bold py-2 px-4 rounded-lg">Auto
+                                        Color</button>
+                                    <button id="scanner-preset-bw"
+                                        class="preset-btn btn-secondary text-white font-bold py-2 px-4 rounded-lg">B&W</button>
+                                    <button id="scanner-preset-color"
+                                        class="preset-btn btn-secondary text-white font-bold py-2 px-4 rounded-lg">Color
+                                        Doc</button>
+                                    <button id="scanner-preset-grayscale"
+                                        class="preset-btn btn-secondary text-white font-bold py-2 px-4 rounded-lg">Grayscale</button>
+                                </div>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold mb-2">Fine-Tune</h3>
+                                <div class="space-y-4">
+                                    <div>
+                                        <label for="scanner-brightness" class="font-medium">Brightness: <span
+                                                id="scanner-brightness-value">0</span></label>
+                                        <input type="range" id="scanner-brightness" min="-50" max="50" value="0">
+                                    </div>
+                                    <div>
+                                        <label for="scanner-contrast" class="font-medium">Contrast: <span
+                                                id="scanner-contrast-value">0</span></label>
+                                        <input type="range" id="scanner-contrast" min="-50" max="50" value="0">
+                                    </div>
+                                </div>
+                            </div>
+                            <button id="scanner-reset-page"
+                                class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition">Reset
+                                Current Page</button>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <button class="accordion-header"><span>Annotate</span><span class="icon"></span></button>
+                        <div class="accordion-content space-y-6">
+                            <div>
+                                <h3 class="text-lg font-semibold mb-2">Annotation Tools</h3>
+                                <div class="grid grid-cols-3 gap-4">
+                                    <button id="scanner-tool-cursor"
+                                        class="tool-btn p-2 border border-gray-600 rounded-lg transition">Cursor</button>
+                                    <button id="scanner-tool-text"
+                                        class="tool-btn p-2 border border-gray-600 rounded-lg transition">Add
+                                        Text</button>
+                                    <button id="scanner-tool-highlight"
+                                        class="tool-btn p-2 border border-gray-600 rounded-lg transition">Highlight</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <button class="accordion-header"><span>Export</span><span class="icon"></span></button>
+                        <div class="accordion-content space-y-6">
+                            <div>
+                                <h3 class="text-lg font-semibold mb-2">Export Options</h3>
+                                <div class="space-y-4">
+                                    <div>
+                                        <label for="scanner-quality-slider" class="font-medium">JPG Quality: <span
+                                                id="scanner-quality-value">90</span>%</label>
+                                        <input type="range" id="scanner-quality-slider" min="10" max="100" value="90">
+                                    </div>
+                                    <div>
+                                        <label for="scanner-pdf-password" class="font-medium">PDF Password
+                                            (Optional)</label>
+                                        <input type="password" id="scanner-pdf-password"
+                                            class="w-full p-2 border bg-gray-800 border-gray-600 rounded-lg text-white"
+                                            placeholder="Enter password to encrypt">
+                                    </div>
+                                </div>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold mb-2">Download</h3>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <button id="scanner-download-jpg"
+                                        class="btn-secondary text-white font-bold py-3 px-4 rounded-lg">Page
+                                        (JPG)</button>
+                                    <button id="scanner-download-zip"
+                                        class="btn-secondary text-white font-bold py-3 px-4 rounded-lg">All
+                                        (ZIP)</button>
+                                    <button id="scanner-download-pdf"
+                                        class="md:col-span-2 btn-primary text-white font-bold py-3 px-4 rounded-lg">Download
+                                        All (PDF)</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="flex flex-col gap-8">
+                <div class="glass-card p-6 relative min-h-[400px] flex items-center justify-center flex-grow">
+                    <div id="scanner-image-container" class="relative w-full h-full max-w-full max-h-full">
+                        <canvas id="scanner-canvas" class="rounded-lg shadow-lg"></canvas>
+                    </div>
+                    <div id="scanner-placeholder-text" class="text-gray-500 text-center">
+                        <svg class="mx-auto h-24 w-24" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1"
+                                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z">
+                            </path>
+                        </svg>
+                        <p class="mt-2 font-medium">Your image will appear here</p>
+                    </div>
+                    <div id="scanner-loader" class="absolute hidden flex-col items-center justify-center">
+                        <div class="loader"></div>
+                        <p id="scanner-loader-text" class="mt-4 font-semibold text-gray-300">Processing...</p>
+                    </div>
+                </div>
+                <div id="scanner-thumbnail-container" class="glass-card p-4 hidden">
+                    <div id="scanner-thumbnail-strip" class="flex items-center gap-4 overflow-x-auto pb-2"></div>
+                    <button id="scanner-add-page-btn"
+                        class="w-full mt-4 btn-primary text-white font-bold py-2 px-4 rounded-lg">Add New Page</button>
+                </div>
+            </div>
+        </div>
+    </template>
+
+
+    <script type="module">
+        import * as pdfjsLib from 'https://mozilla.github.io/pdf.js/build/pdf.mjs';
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://mozilla.github.io/pdf.js/build/pdf.worker.mjs';
+
+        let scannerInitialized = false;
+
+        // --- Main App Logic ---
+        const toolSelectionView = document.getElementById('tool-selection-view');
+        const scannerView = document.getElementById('scanner-view');
+        const pdfToolsView = document.getElementById('pdf-tools-view');
+        const toolCards = document.querySelectorAll('.tool-card');
+        const pdfToolViews = document.querySelectorAll('.pdf-tool-view');
+
+        function showView(view) {
+            toolSelectionView.classList.add('hidden');
+            scannerView.classList.add('hidden');
+            pdfToolsView.classList.add('hidden');
+            view.classList.remove('hidden');
+        }
+
+        toolCards.forEach(card => {
+            card.addEventListener('click', () => {
+                const tool = card.dataset.tool;
+                if (tool === 'scanner') {
+                    if (!scannerView.innerHTML) {
+                        const scannerTemplate = document.getElementById('scanner-template').content.cloneNode(true);
+                        scannerView.appendChild(scannerTemplate);
+                    }
+                    showView(scannerView);
+                    if (!scannerInitialized) {
+                        initScanner();
+                        scannerInitialized = true;
+                    }
+                } else {
+                    showView(pdfToolsView);
+                    pdfToolViews.forEach(v => v.classList.add('hidden'));
+                    document.getElementById(`${tool}-view`).classList.remove('hidden');
+                }
+            });
+        });
+
+        function initApp() {
+            document.querySelectorAll('.back-to-tools-btn').forEach(btn => {
+                btn.addEventListener('click', () => showView(toolSelectionView));
+            });
+            setupTheme();
+            document.getElementById('theme-toggle-btn').addEventListener('click', toggleTheme);
+            initPdfTools();
+        }
+
+        // --- PDF Tools Logic ---
+        function initPdfTools() {
+            const mergeFilesInput = document.getElementById('merge-files-input');
+            const mergeFileList = document.getElementById('merge-file-list');
+            const mergePdfBtn = document.getElementById('merge-pdf-btn');
+            let filesToMerge = [];
+
+            mergeFilesInput.addEventListener('change', (e) => {
+                filesToMerge = Array.from(e.target.files);
+                mergeFileList.innerHTML = '';
+                filesToMerge.forEach(file => {
+                    const li = document.createElement('li');
+                    li.textContent = file.name;
+                    li.className = 'p-2 bg-gray-700 rounded';
+                    mergeFileList.appendChild(li);
+                });
+                mergePdfBtn.classList.toggle('hidden', filesToMerge.length < 2);
+            });
+
+            mergePdfBtn.addEventListener('click', async () => {
+                if (filesToMerge.length < 2) return;
+                showGlobalLoader(true, 'Merging PDFs...');
+                const { PDFDocument } = PDFLib;
+                const mergedPdf = await PDFDocument.create();
+
+                for (const file of filesToMerge) {
+                    const pdfBytes = await file.arrayBuffer();
+                    const pdfDoc = await PDFDocument.load(pdfBytes);
+                    const copiedPages = await mergedPdf.copyPages(pdfDoc, pdfDoc.getPageIndices());
+                    copiedPages.forEach(page => mergedPdf.addPage(page));
+                }
+
+                const pdfBytes = await mergedPdf.save();
+                downloadBlob(pdfBytes, 'merged.pdf', 'application/pdf');
+                showGlobalLoader(false);
+            });
+
+            const splitFileInput = document.getElementById('split-file-input');
+            const splitPreviewArea = document.getElementById('split-preview-area');
+            const splitPagesInput = document.getElementById('split-pages-input');
+            const splitPdfBtn = document.getElementById('split-pdf-btn');
+            let splitPdfDoc = null;
+
+            splitFileInput.addEventListener('change', async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                showGlobalLoader(true, 'Loading PDF...');
+                const fileReader = new FileReader();
+                fileReader.onload = async (ev) => {
+                    const typedarray = new Uint8Array(ev.target.result);
+                    splitPdfDoc = await pdfjsLib.getDocument({ data: typedarray }).promise;
+                    splitPreviewArea.classList.remove('hidden');
+                    splitPagesInput.placeholder = `Enter pages (e.g., 1, 3-5). Max: ${splitPdfDoc.numPages}`;
+                    showGlobalLoader(false);
+                };
+                fileReader.readAsArrayBuffer(file);
+            });
+
+            splitPdfBtn.addEventListener('click', async () => {
+                if (!splitPdfDoc) return;
+                showGlobalLoader(true, 'Splitting PDF...');
+                const { PDFDocument } = PDFLib;
+                const pageRanges = splitPagesInput.value.split(',').map(s => s.trim());
+                const pagesToCopy = new Set();
+
+                pageRanges.forEach(range => {
+                    if (range.includes('-')) {
+                        const [start, end] = range.split('-').map(Number);
+                        for (let i = start; i <= end; i++) pagesToCopy.add(i - 1);
+                    } else {
+                        pagesToCopy.add(Number(range) - 1);
+                    }
+                });
+
+                const pdfBytes = await splitFileInput.files[0].arrayBuffer();
+                const originalPdf = await PDFDocument.load(pdfBytes);
+                const newPdf = await PDFDocument.create();
+
+                const copiedPages = await newPdf.copyPages(originalPdf, Array.from(pagesToCopy));
+                copiedPages.forEach(page => newPdf.addPage(page));
+
+                const newPdfBytes = await newPdf.save();
+                downloadBlob(newPdfBytes, 'split.pdf', 'application/pdf');
+                showGlobalLoader(false);
+            });
+
+            const pdfToJpgInput = document.getElementById('pdf-to-jpg-input');
+            const convertPdfBtn = document.getElementById('convert-pdf-btn');
+
+            pdfToJpgInput.addEventListener('change', (e) => {
+                convertPdfBtn.classList.toggle('hidden', !e.target.files.length);
+            });
+
+            convertPdfBtn.addEventListener('click', async () => {
+                const file = pdfToJpgInput.files[0];
+                if (!file) return;
+                showGlobalLoader(true, 'Converting...');
+                const fileReader = new FileReader();
+                fileReader.onload = async (ev) => {
+                    const typedarray = new Uint8Array(ev.target.result);
+                    const pdf = await pdfjsLib.getDocument({ data: typedarray }).promise;
+                    const zip = new JSZip();
+
+                    for (let i = 1; i <= pdf.numPages; i++) {
+                        showGlobalLoader(true, `Converting page ${i}/${pdf.numPages}`);
+                        const page = await pdf.getPage(i);
+                        const viewport = page.getViewport({ scale: 2.0 });
+                        const canvas = document.createElement('canvas');
+                        const context = canvas.getContext('2d');
+                        canvas.height = viewport.height;
+                        canvas.width = viewport.width;
+                        await page.render({ canvasContext: context, viewport: viewport }).promise;
+                        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.9));
+                        zip.file(`page-${i}.jpg`, blob);
+                    }
+                    const content = await zip.generateAsync({ type: 'blob' });
+                    downloadBlob(content, 'converted-images.zip', 'application/zip');
+                    showGlobalLoader(false);
+                };
+                fileReader.readAsArrayBuffer(file);
+            });
+        }
+
+        // --- Scanner Logic (self-contained in its own function) ---
+        function initScanner() {
+            // DOM Elements
+            const inputView = document.getElementById('scanner-input-view');
+            const controlsSection = document.getElementById('scanner-controls-section');
+            const tabUpload = document.getElementById('scanner-tab-upload');
+            const tabCamera = document.getElementById('scanner-tab-camera');
+            const uploadSection = document.getElementById('scanner-upload-section');
+            const cameraSection = document.getElementById('scanner-camera-section');
+            const imageUpload = document.getElementById('scanner-image-upload');
+            const videoFeed = document.getElementById('scanner-video-feed');
+            const startCameraBtn = document.getElementById('scanner-start-camera');
+            const capturePhotoBtn = document.getElementById('scanner-capture-photo');
+            const imageContainer = document.getElementById('scanner-image-container');
+            const canvas = document.getElementById('scanner-canvas');
+            const ctx = canvas.getContext('2d');
+            const placeholderText = document.getElementById('scanner-placeholder-text');
+            const loader = document.getElementById('scanner-loader');
+            const loaderText = document.getElementById('scanner-loader-text');
+            const thumbnailContainer = document.getElementById('scanner-thumbnail-container');
+            const thumbnailStrip = document.getElementById('scanner-thumbnail-strip');
+            const addPageBtn = document.getElementById('scanner-add-page-btn');
+            const pageNumberDisplay = document.getElementById('scanner-page-number-display');
+
+            // Control Buttons & Sliders
+            const cropAndWarpBtn = document.getElementById('scanner-crop-and-warp');
+            const rotatePageBtn = document.getElementById('scanner-rotate-page');
+            const brightnessSlider = document.getElementById('scanner-brightness');
+            const contrastSlider = document.getElementById('scanner-contrast');
+            const qualitySlider = document.getElementById('scanner-quality-slider');
+            const pdfPasswordInput = document.getElementById('scanner-pdf-password');
+            const presetAutoColorBtn = document.getElementById('scanner-preset-auto-color');
+            const presetBwBtn = document.getElementById('scanner-preset-bw');
+            const presetColorBtn = document.getElementById('scanner-preset-color');
+            const presetGrayscaleBtn = document.getElementById('scanner-preset-grayscale');
+            const resetPageBtn = document.getElementById('scanner-reset-page');
+            const downloadJpgBtn = document.getElementById('scanner-download-jpg');
+            const downloadZipBtn = document.getElementById('scanner-download-zip');
+            const downloadPdfBtn = document.getElementById('scanner-download-pdf');
+            const aspectRatioBtns = document.querySelectorAll('#scanner-aspect-ratio-btns .aspect-btn');
+
+            // Tool Buttons
+            const toolCursorBtn = document.getElementById('scanner-tool-cursor');
+            const toolTextBtn = document.getElementById('scanner-tool-text');
+            const toolHighlightBtn = document.getElementById('scanner-tool-highlight');
+
+            // State variables
+            let pages = [];
+            let currentPageId = null;
+            let stream = null;
+            let cornerHandles = [];
+            let draggableInstances = [];
+            let currentTool = 'cursor';
+            let isDrawingHighlight = false;
+            let highlightStartX = 0, highlightStartY = 0;
+
+            function setupScannerTabs() {
+                tabUpload.classList.add('active');
+            }
+
+            function switchScannerTab(tabName) {
+                tabUpload.classList.toggle('active', tabName === 'upload');
+                tabCamera.classList.toggle('active', tabName === 'camera');
+                uploadSection.classList.toggle('hidden', tabName !== 'upload');
+                cameraSection.classList.toggle('hidden', tabName === 'upload');
+                if (tabName === 'upload') stopCamera(stream);
+            }
+
+            function setupScannerEventListeners() {
+                tabUpload.addEventListener('click', () => switchScannerTab('upload'));
+                tabCamera.addEventListener('click', () => switchScannerTab('camera'));
+                imageUpload.addEventListener('change', handleImageUpload);
+                startCameraBtn.addEventListener('click', startCamera);
+                capturePhotoBtn.addEventListener('click', capturePhoto);
+                addPageBtn.addEventListener('click', showInputView);
+                cropAndWarpBtn.addEventListener('click', applyPerspectiveTransform);
+                rotatePageBtn.addEventListener('click', rotateCurrentPage);
+
+                aspectRatioBtns.forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        const ratio = btn.dataset.ratio;
+                        setAspectRatio(ratio);
+                        aspectRatioBtns.forEach(b => b.classList.remove('active'));
+                        btn.classList.add('active');
+                    });
+                });
+
+                toolCursorBtn.addEventListener('click', () => setActiveTool('cursor'));
+                toolTextBtn.addEventListener('click', () => setActiveTool('text'));
+                toolHighlightBtn.addEventListener('click', () => setActiveTool('highlight'));
+                canvas.addEventListener('mousedown', onCanvasMouseDown);
+                canvas.addEventListener('mousemove', onCanvasMouseMove);
+                canvas.addEventListener('mouseup', onCanvasMouseUp);
+                canvas.addEventListener('click', onCanvasClick);
+
+                qualitySlider.addEventListener('input', () => document.getElementById('scanner-quality-value').textContent = qualitySlider.value);
+                brightnessSlider.addEventListener('input', () => document.getElementById('scanner-brightness-value').textContent = brightnessSlider.value);
+                contrastSlider.addEventListener('input', () => document.getElementById('scanner-contrast-value').textContent = contrastSlider.value);
+                presetAutoColorBtn.addEventListener('click', () => applyPreset('contrast(150%) brightness(110%) saturate(110%)'));
+                presetBwBtn.addEventListener('click', () => applyPreset('grayscale(100%) contrast(180%) brightness(110%)'));
+                presetColorBtn.addEventListener('click', () => applyPreset('contrast(140%) brightness(105%) saturate(120%)'));
+                presetGrayscaleBtn.addEventListener('click', () => applyPreset('grayscale(100%)'));
+                resetPageBtn.addEventListener('click', resetCurrentPage);
+
+                downloadJpgBtn.addEventListener('click', downloadJpg);
+                downloadZipBtn.addEventListener('click', downloadZip);
+                downloadPdfBtn.addEventListener('click', downloadPdf);
+            }
+
+            function showInputView() { inputView.classList.remove('hidden'); controlsSection.classList.add('hidden'); }
+            function showControlsView() {
+                inputView.classList.add('hidden');
+                controlsSection.classList.remove('hidden');
+                const firstHeader = controlsSection.querySelector('.accordion-header');
+                if (firstHeader && !firstHeader.classList.contains('active')) {
+                    firstHeader.click();
+                }
+            }
+
+            function setupAccordion() {
+                const accordionHeaders = controlsSection.querySelectorAll('.accordion-header');
+                accordionHeaders.forEach(header => {
+                    header.addEventListener('click', () => {
+                        const content = header.nextElementSibling;
+                        const isActive = header.classList.contains('active');
+                        accordionHeaders.forEach(h => {
+                            h.classList.remove('active');
+                            h.nextElementSibling.style.display = 'none';
+                        });
+                        if (!isActive) {
+                            header.classList.add('active');
+                            content.style.display = 'block';
+                        }
+                    });
+                });
+            }
+
+            function setActiveTool(tool) {
+                currentTool = tool;
+                toolCursorBtn.classList.toggle('active', tool === 'cursor');
+                toolTextBtn.classList.toggle('active', tool === 'text');
+                toolHighlightBtn.classList.toggle('active', tool === 'highlight');
+                canvas.style.cursor = tool === 'cursor' ? 'default' : 'crosshair';
+            }
+
+            function addPage(img) {
+                const page = { id: Date.now(), originalImage: img, processedImage: img, activeFilter: 'none', overlays: [] };
+                pages.push(page);
+                setCurrentPage(page.id);
+                thumbnailContainer.classList.remove('hidden');
+                renderThumbnails();
+                showControlsView();
+            }
+
+            function setCurrentPage(pageId) {
+                currentPageId = pageId;
+                const page = pages.find(p => p.id === pageId);
+                if (!page) return;
+                displayImageOnCanvas(page.processedImage);
+                const pageIndex = pages.findIndex(p => p.id === pageId);
+                pageNumberDisplay.textContent = `(#${pageIndex + 1})`;
+                renderThumbnails();
+            }
+
+            function deletePage(pageId) {
+                pages = pages.filter(p => p.id !== pageId);
+                if (currentPageId === pageId) {
+                    currentPageId = pages.length > 0 ? pages[0].id : null;
+                }
+                if (!currentPageId) {
+                    placeholderText.classList.remove('hidden');
+                    canvas.style.display = 'none';
+                    thumbnailContainer.classList.add('hidden');
+                    showInputView();
+                } else {
+                    setCurrentPage(currentPageId);
+                }
+                renderThumbnails();
+            }
+
+            function onPageReorder(evt) {
+                const movedPage = pages.splice(evt.oldIndex, 1)[0];
+                pages.splice(evt.newIndex, 0, movedPage);
+                renderThumbnails();
+            }
+
+            function handleImageUpload(e) {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (event) => { const img = new Image(); img.onload = () => addPage(img); img.src = event.target.result; };
+                    reader.readAsDataURL(file);
+                }
+            }
+
+            async function startCamera() {
+                try {
+                    if (stream) { stopCamera(stream); stream = null; return; }
+                    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+                    videoFeed.srcObject = stream;
+                    videoFeed.play();
+                    startCameraBtn.textContent = 'Stop Camera';
+                    capturePhotoBtn.disabled = false;
+                } catch (err) { console.error("Error accessing camera:", err); }
+            }
+
+            function stopCamera(streamToStop, buttonToReset = startCameraBtn) {
+                if (streamToStop) {
+                    streamToStop.getTracks().forEach(track => track.stop());
+                    if (buttonToReset) {
+                        buttonToReset.textContent = 'Start Camera';
+                    }
+                }
+                if (buttonToReset === startCameraBtn) { capturePhotoBtn.disabled = true; }
+            }
+
+            function capturePhoto() {
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = videoFeed.videoWidth;
+                tempCanvas.height = videoFeed.videoHeight;
+                tempCanvas.getContext('2d').drawImage(videoFeed, 0, 0);
+                const img = new Image();
+                img.onload = () => { addPage(img); stopCamera(stream); stream = null; };
+                img.src = tempCanvas.toDataURL('image/webp');
+            }
+
+            function displayImageOnCanvas(img) {
+                placeholderText.classList.add('hidden');
+                canvas.style.display = 'block';
+                const containerWidth = imageContainer.clientWidth;
+                const containerHeight = imageContainer.clientHeight;
+                const imgAspectRatio = img.width / img.height;
+                let newWidth = containerWidth, newHeight = newWidth / imgAspectRatio;
+                if (newHeight > containerHeight) { newHeight = containerHeight; newWidth = newHeight * imgAspectRatio; }
+                canvas.width = newWidth; canvas.height = newHeight;
+                createCornerHandles();
+            }
+
+            function createCornerHandles() {
+                cornerHandles.forEach(h => h.remove());
+                draggableInstances.forEach(d => d.kill());
+                cornerHandles = []; draggableInstances = [];
+                const padding = 10;
+                const positions = [{ x: padding, y: padding }, { x: canvas.width - padding, y: padding }, { x: canvas.width - padding, y: canvas.height - padding }, { x: padding, y: canvas.height - padding }];
+                positions.forEach((pos) => {
+                    const handle = document.createElement('div');
+                    handle.className = 'corner-handle';
+                    imageContainer.appendChild(handle);
+                    gsap.set(handle, { x: pos.x - 10, y: pos.y - 10 });
+                    cornerHandles.push(handle);
+                    const dragInstance = Draggable.create(handle, { bounds: canvas, onDrag: drawOverlay, onPress: drawOverlay })[0];
+                    draggableInstances.push(dragInstance);
+                });
+                drawOverlay();
+            }
+
+            function drawOverlay() {
+                const page = pages.find(p => p.id === currentPageId);
+                if (!page) return;
+
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.filter = page.activeFilter;
+                ctx.drawImage(page.processedImage, 0, 0, canvas.width, canvas.height);
+                ctx.filter = 'none';
+
+                page.overlays.forEach(overlay => {
+                    const scaleX = canvas.width / page.processedImage.width;
+                    const scaleY = canvas.height / page.processedImage.height;
+                    if (overlay.type === 'text') {
+                        ctx.font = `${overlay.size * scaleY}px sans-serif`;
+                        ctx.fillStyle = document.body.dataset.theme === 'dark' ? 'white' : 'black';
+                        ctx.fillText(overlay.text, overlay.x * scaleX, overlay.y * scaleY);
+                    } else if (overlay.type === 'highlight') {
+                        ctx.fillStyle = 'rgba(255, 255, 0, 0.4)';
+                        ctx.fillRect(overlay.x * scaleX, overlay.y * scaleY, overlay.width * scaleX, overlay.height * scaleY);
+                    }
+                });
+
+                if (cornerHandles.length === 4) {
+                    const points = cornerHandles.map(h => ({ x: gsap.getProperty(h, "x") + 10, y: gsap.getProperty(h, "y") + 10 }));
+                    ctx.beginPath();
+                    ctx.moveTo(points[0].x, points[0].y);
+                    points.forEach(p => ctx.lineTo(p.x, p.y));
+                    ctx.closePath();
+                    ctx.fillStyle = 'rgba(99, 102, 241, 0.2)';
+                    ctx.fill();
+                    ctx.strokeStyle = 'rgba(99, 102, 241, 1)';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                }
+            }
+
+            function applyPerspectiveTransform() {
+                const page = pages.find(p => p.id === currentPageId);
+                if (!page || cornerHandles.length !== 4) return;
+                showLoader(true, "Cropping...");
+                setTimeout(() => {
+                    const cornerPoints = cornerHandles.map(h => ({
+                        x: (gsap.getProperty(h, "x") + 10) * (page.originalImage.width / canvas.width),
+                        y: (gsap.getProperty(h, "y") + 10) * (page.originalImage.height / canvas.height)
+                    }));
+                    const maxWidth = Math.max(Math.hypot(cornerPoints[2].x - cornerPoints[3].x, cornerPoints[2].y - cornerPoints[3].y), Math.hypot(cornerPoints[1].x - cornerPoints[0].x, cornerPoints[1].y - cornerPoints[0].y));
+                    const maxHeight = Math.max(Math.hypot(cornerPoints[1].x - cornerPoints[2].x, cornerPoints[1].y - cornerPoints[2].y), Math.hypot(cornerPoints[0].x - cornerPoints[3].x, cornerPoints[0].y - cornerPoints[3].y));
+                    const transformedDataUrl = perspectiveWarp(page.originalImage, cornerPoints, maxWidth, maxHeight);
+                    const img = new Image();
+                    img.onload = () => {
+                        page.processedImage = img;
+                        page.overlays = [];
+                        displayImageOnCanvas(img);
+                        renderThumbnails();
+                        showLoader(false);
+                    };
+                    img.src = transformedDataUrl;
+                }, 50);
+            }
+
+            function rotateCurrentPage() {
+                const page = pages.find(p => p.id === currentPageId);
+                if (!page) return;
+                const img = page.processedImage;
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = img.height; tempCanvas.height = img.width;
+                const tempCtx = tempCanvas.getContext('2d');
+                tempCtx.translate(img.height / 2, img.width / 2);
+                tempCtx.rotate(90 * Math.PI / 180);
+                tempCtx.drawImage(img, -img.width / 2, -img.height / 2);
+                const rotatedImage = new Image();
+                rotatedImage.onload = () => {
+                    page.processedImage = rotatedImage;
+                    page.overlays = [];
+                    displayImageOnCanvas(rotatedImage);
+                    renderThumbnails();
+                };
+                rotatedImage.src = tempCanvas.toDataURL();
+            }
+
+            function applyPreset(filterString) {
+                const page = pages.find(p => p.id === currentPageId);
+                if (page) { page.activeFilter = filterString; drawOverlay(); }
+            }
+
+            function applyManualFilters() {
+                const page = pages.find(p => p.id === currentPageId);
+                if (!page) return;
+                const brightness = 100 + parseInt(brightnessSlider.value);
+                const contrast = 100 + parseInt(contrastSlider.value);
+                page.activeFilter = `brightness(${brightness}%) contrast(${contrast}%)`;
+                drawOverlay();
+            }
+
+            function resetCurrentPage() {
+                const page = pages.find(p => p.id === currentPageId);
+                if (page) {
+                    page.processedImage = page.originalImage;
+                    page.activeFilter = 'none';
+                    page.overlays = [];
+                    setCurrentPage(page.id);
+                    renderThumbnails();
+                }
+            }
+
+            function renderThumbnails() {
+                thumbnailStrip.innerHTML = '';
+                pages.forEach((page, index) => {
+                    const thumbWrapper = document.createElement('div');
+                    thumbWrapper.className = `thumbnail relative rounded-lg overflow-hidden w-24 h-32 flex-shrink-0 ${page.id === currentPageId ? 'active' : ''}`;
+                    thumbWrapper.dataset.id = page.id;
+                    thumbWrapper.onclick = () => setCurrentPage(page.id);
+                    const thumbCanvas = document.createElement('canvas');
+                    const thumbCtx = thumbCanvas.getContext('2d');
+                    thumbWrapper.appendChild(thumbCanvas);
+                    thumbCanvas.width = 96; thumbCanvas.height = 128;
+                    thumbCtx.filter = page.activeFilter;
+                    thumbCtx.drawImage(page.processedImage, 0, 0, 96, 128);
+
+                    const scaleX = 96 / page.processedImage.width;
+                    const scaleY = 128 / page.processedImage.height;
+                    page.overlays.forEach(overlay => {
+                        if (overlay.type === 'text') {
+                            thumbCtx.font = `${overlay.size * scaleY}px sans-serif`;
+                            thumbCtx.fillStyle = 'black';
+                            thumbCtx.fillText(overlay.text, overlay.x * scaleX, overlay.y * scaleY);
+                        } else if (overlay.type === 'highlight') {
+                            thumbCtx.fillStyle = 'rgba(255, 255, 0, 0.4)';
+                            thumbCtx.fillRect(overlay.x * scaleX, overlay.y * scaleY, overlay.width * scaleX, overlay.height * scaleY);
+                        }
+                    });
+
+                    const pageNum = document.createElement('div');
+                    pageNum.className = 'absolute bottom-1 left-1 bg-black bg-opacity-50 text-white text-xs px-1 rounded';
+                    pageNum.textContent = index + 1;
+                    thumbWrapper.appendChild(pageNum);
+                    const deleteBtn = document.createElement('div');
+                    deleteBtn.className = 'delete-page-btn';
+                    deleteBtn.innerHTML = '&times;';
+                    deleteBtn.onclick = (e) => { e.stopPropagation(); deletePage(page.id); };
+                    thumbWrapper.appendChild(deleteBtn);
+                    thumbnailStrip.appendChild(thumbWrapper);
+                });
+            }
+
+            function getMousePos(canvasDom, mouseEvent) {
+                const rect = canvasDom.getBoundingClientRect();
+                const event = mouseEvent.touches ? mouseEvent.touches[0] : mouseEvent;
+                return [event.clientX - rect.left, event.clientY - rect.top];
+            }
+
+            function onCanvasClick(e) {
+                if (currentTool !== 'text') return;
+                const text = prompt("Enter text to add:");
+                if (!text) return;
+                const page = pages.find(p => p.id === currentPageId);
+                if (!page) return;
+
+                const [x, y] = getMousePos(canvas, e);
+                const scaleX = page.processedImage.width / canvas.width;
+                const scaleY = page.processedImage.height / canvas.height;
+
+                const overlay = { type: 'text', text, x: x * scaleX, y: y * scaleY, size: 24 };
+                page.overlays.push(overlay);
+                drawOverlay(); renderThumbnails();
+            }
+
+            function onCanvasMouseDown(e) {
+                if (currentTool !== 'highlight') return;
+                isDrawingHighlight = true;
+                [highlightStartX, highlightStartY] = getMousePos(canvas, e);
+            }
+            function onCanvasMouseMove(e) {
+                if (!isDrawingHighlight) return;
+                drawOverlay();
+                const [currentX, currentY] = getMousePos(canvas, e);
+                ctx.fillStyle = 'rgba(255, 255, 0, 0.4)';
+                ctx.fillRect(highlightStartX, highlightStartY, currentX - highlightStartX, currentY - highlightStartY);
+            }
+            function onCanvasMouseUp(e) {
+                if (!isDrawingHighlight) return;
+                isDrawingHighlight = false;
+                const page = pages.find(p => p.id === currentPageId);
+                if (!page) return;
+
+                const [endX, endY] = getMousePos(canvas, e);
+                const scaleX = page.processedImage.width / canvas.width;
+                const scaleY = page.processedImage.height / canvas.height;
+
+                const overlay = {
+                    type: 'highlight',
+                    x: Math.min(highlightStartX, endX) * scaleX,
+                    y: Math.min(highlightStartY, endY) * scaleY,
+                    width: Math.abs(endX - highlightStartX) * scaleX,
+                    height: Math.abs(endY - highlightStartY) * scaleY
+                };
+                page.overlays.push(overlay);
+                drawOverlay(); renderThumbnails();
+            }
+
+            function setAspectRatio(ratio) {
+                if (cornerHandles.length !== 4) return;
+                if (ratio === 'free') {
+                    createCornerHandles();
+                    return;
+                }
+
+                const ratioValue = ratio === 'a4p' ? (1 / 1.414) : 1.414;
+                const canvasWidth = canvas.width;
+                const canvasHeight = canvas.height;
+                const canvasRatio = canvasWidth / canvasHeight;
+
+                let newWidth, newHeight;
+                if (ratioValue > canvasRatio) {
+                    newWidth = canvasWidth;
+                    newHeight = newWidth / ratioValue;
+                } else {
+                    newHeight = canvasHeight;
+                    newWidth = newHeight * ratioValue;
+                }
+
+                const startX = (canvasWidth - newWidth) / 2;
+                const startY = (canvasHeight - newHeight) / 2;
+                const endX = startX + newWidth;
+                const endY = startY + newHeight;
+
+                const positions = [{ x: startX, y: startY }, { x: endX, y: startY }, { x: endX, y: endY }, { x: startX, y: endY }];
+                positions.forEach((pos, i) => {
+                    gsap.set(cornerHandles[i], { x: pos.x - 10, y: pos.y - 10 });
+                });
+                drawOverlay();
+            }
+
+            function getPageAsDataURL(page, type = 'image/jpeg') {
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = page.processedImage.width;
+                tempCanvas.height = page.processedImage.height;
+                const tempCtx = tempCanvas.getContext('2d');
+                tempCtx.filter = page.activeFilter;
+                tempCtx.drawImage(page.processedImage, 0, 0);
+                page.overlays.forEach(overlay => {
+                    if (overlay.type === 'text') {
+                        tempCtx.font = `${overlay.size}px sans-serif`;
+                        tempCtx.fillStyle = 'black';
+                        tempCtx.fillText(overlay.text, overlay.x, overlay.y);
+                    } else if (overlay.type === 'highlight') {
+                        tempCtx.fillStyle = 'rgba(255, 255, 0, 0.4)';
+                        tempCtx.fillRect(overlay.x, overlay.y, overlay.width, overlay.height);
+                    }
+                });
+                const quality = parseInt(qualitySlider.value) / 100;
+                return tempCanvas.toDataURL(type, quality);
+            }
+
+            function downloadJpg() {
+                const page = pages.find(p => p.id === currentPageId);
+                if (!page) return;
+                const dataUrl = getPageAsDataURL(page, 'image/jpeg');
+                const link = document.createElement('a');
+                link.download = `scan-page-${pages.indexOf(page) + 1}.jpg`;
+                link.href = dataUrl;
+                link.click();
+            }
+
+            async function downloadZip() {
+                if (pages.length === 0) return;
+                showLoader(true, 'Zipping files...');
+                const zip = new JSZip();
+                for (let i = 0; i < pages.length; i++) {
+                    const page = pages[i];
+                    const dataUrl = getPageAsDataURL(page, 'image/jpeg');
+                    const base64Data = dataUrl.split(',')[1];
+                    zip.file(`page-${i + 1}.jpg`, base64Data, { base64: true });
+                }
+                const content = await zip.generateAsync({ type: 'blob' });
+                downloadBlob(content, 'scanned-document.zip', 'application/zip');
+                showLoader(false);
+            }
+
+            async function downloadPdf() {
+                if (pages.length === 0) return;
+                const { jsPDF } = window.jspdf;
+                const password = pdfPasswordInput.value;
+                const pdfOptions = password ? { userPassword: password } : {};
+                const pdf = new jsPDF(pdfOptions);
+                showLoader(true, 'Creating PDF...');
+                for (let i = 0; i < pages.length; i++) {
+                    const page = pages[i];
+                    const imgData = getPageAsDataURL(page, 'image/jpeg');
+                    const tempImg = new Image();
+                    await new Promise(resolve => {
+                        tempImg.onload = () => {
+                            const pdfWidth = pdf.internal.pageSize.getWidth();
+                            const pdfHeight = pdf.internal.pageSize.getHeight();
+                            const imgAspectRatio = tempImg.width / tempImg.height;
+                            const pdfAspectRatio = pdfWidth / pdfHeight;
+                            let imgPdfWidth = pdfWidth, imgPdfHeight = pdfHeight;
+                            if (imgAspectRatio > pdfAspectRatio) { imgPdfHeight = pdfWidth / imgAspectRatio; } else { imgPdfWidth = pdfHeight * imgAspectRatio; }
+                            const x = (pdfWidth - imgPdfWidth) / 2;
+                            const y = (pdfHeight - imgPdfHeight) / 2;
+                            if (i > 0) pdf.addPage();
+                            pdf.addImage(imgData, 'JPEG', x, y, imgPdfWidth, imgPdfHeight);
+                            resolve();
+                        };
+                        tempImg.src = imgData;
+                    });
+                }
+                pdf.save('scanned-document.pdf');
+                showLoader(false);
+            }
+
+            function showLoader(show, text = 'Processing...') {
+                loader.style.display = show ? 'flex' : 'none';
+                loaderText.textContent = text;
+            }
+
+            function perspectiveWarp(img, srcCorners, outWidth, outHeight) {
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = outWidth; tempCanvas.height = outHeight;
+                const tempCtx = tempCanvas.getContext('2d');
+                const src = srcCorners;
+                const dst = [{ x: 0, y: 0 }, { x: outWidth, y: 0 }, { x: outWidth, y: outHeight }, { x: 0, y: outHeight }];
+                const transform = getTransform(src, dst);
+                const srcCanvas = document.createElement('canvas');
+                srcCanvas.width = img.width; srcCanvas.height = img.height;
+                srcCanvas.getContext('2d').drawImage(img, 0, 0);
+                const srcData = srcCanvas.getContext('2d').getImageData(0, 0, img.width, img.height);
+                const outData = tempCtx.createImageData(outWidth, outHeight);
+                for (let y = 0; y < outHeight; y++) {
+                    for (let x = 0; x < outWidth; x++) {
+                        const srcPoint = applyTransform(x, y, transform.inverse);
+                        const srcX = Math.round(srcPoint.x), srcY = Math.round(srcPoint.y);
+                        if (srcX >= 0 && srcX < img.width && srcY >= 0 && srcY < img.height) {
+                            const srcIdx = (srcY * img.width + srcX) * 4;
+                            const dstIdx = (y * outWidth + x) * 4;
+                            outData.data.set(srcData.data.subarray(srcIdx, srcIdx + 4), dstIdx);
+                        }
+                    }
+                }
+                tempCtx.putImageData(outData, 0, 0);
+                return tempCanvas.toDataURL();
+            }
+            function applyTransform(x, y, m) {
+                const z = m[6] * x + m[7] * y + 1;
+                return { x: (m[0] * x + m[1] * y + m[2]) / z, y: (m[3] * x + m[4] * y + m[5]) / z };
+            }
+            function getTransform(src, dst) {
+                const P = [
+                    [src[0].x, src[0].y, 1, 0, 0, 0, -src[0].x * dst[0].x, -src[0].y * dst[0].x],
+                    [0, 0, 0, src[0].x, src[0].y, 1, -src[0].x * dst[0].y, -src[0].y * dst[0].y],
+                    [src[1].x, src[1].y, 1, 0, 0, 0, -src[1].x * dst[1].x, -src[1].y * dst[1].x],
+                    [0, 0, 0, src[1].x, src[1].y, 1, -src[1].x * dst[1].y, -src[1].y * dst[1].y],
+                    [src[2].x, src[2].y, 1, 0, 0, 0, -src[2].x * dst[2].x, -src[2].y * dst[2].y],
+                    [0, 0, 0, src[2].x, src[2].y, 1, -src[2].x * dst[2].y, -src[2].y * dst[2].y],
+                    [src[3].x, src[3].y, 1, 0, 0, 0, -src[3].x * dst[3].x, -src[3].y * dst[3].x],
+                    [0, 0, 0, src[3].x, src[3].y, 1, -src[3].x * dst[3].y, -src[3].y * dst[3].y]
+                ];
+                const V = [dst[0].x, dst[0].y, dst[1].x, dst[1].y, dst[2].x, dst[2].y, dst[3].x, dst[3].y];
+                const C = solve(P, V);
+                const matrix = [C[0], C[1], C[2], C[3], C[4], C[5], C[6], C[7], 1];
+                const invDet = 1 / (matrix[0] * (matrix[4] * matrix[8] - matrix[5] * matrix[7]) - matrix[1] * (matrix[3] * matrix[8] - matrix[5] * matrix[6]) + matrix[2] * (matrix[3] * matrix[7] - matrix[4] * matrix[6]));
+                const inverse = [
+                    (matrix[4] * matrix[8] - matrix[5] * matrix[7]) * invDet, (matrix[2] * matrix[7] - matrix[1] * matrix[8]) * invDet, (matrix[1] * matrix[5] - matrix[2] * matrix[4]) * invDet,
+                    (matrix[5] * matrix[6] - matrix[3] * matrix[8]) * invDet, (matrix[0] * matrix[8] - matrix[2] * matrix[6]) * invDet, (matrix[2] * matrix[3] - matrix[0] * matrix[5]) * invDet,
+                    (matrix[3] * matrix[7] - matrix[4] * matrix[6]) * invDet, (matrix[1] * matrix[6] - matrix[0] * matrix[7]) * invDet, (matrix[0] * matrix[4] - matrix[1] * matrix[3]) * invDet
+                ];
+                return { forward: matrix, inverse: inverse };
+            }
+            function solve(A, b) {
+                const n = A.length;
+                for (let i = 0; i < n; i++) {
+                    let maxRow = i;
+                    for (let k = i + 1; k < n; k++) if (Math.abs(A[k][i]) > Math.abs(A[maxRow][i])) maxRow = k;
+                    [A[i], A[maxRow]] = [A[maxRow], A[i]];
+                    [b[i], b[maxRow]] = [b[maxRow], b[i]];
+                    for (let k = i + 1; k < n; k++) {
+                        const c = -A[k][i] / A[i][i];
+                        for (let j = i; j < n; j++) if (i === j) A[k][j] = 0; else A[k][j] += c * A[i][j];
+                        b[k] += c * b[i];
+                    }
+                }
+                const x = new Array(n);
+                for (let i = n - 1; i > -1; i--) {
+                    x[i] = b[i] / A[i][i];
+                    for (let k = i - 1; k > -1; k--) b[k] -= A[k][i] * x[i];
+                }
+                return x;
+            }
+
+            setupScannerTabs();
+            setupScannerEventListeners();
+            setupAccordion();
+            setActiveTool('cursor');
+            new Sortable(thumbnailStrip, {
+                animation: 150,
+                ghostClass: 'sortable-ghost',
+                onEnd: onPageReorder,
+            });
+        }
+
+        // --- Global Utility Functions ---
+        function downloadBlob(data, fileName, mimeType) {
+            const blob = new Blob([data], { type: mimeType });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            a.remove();
+        }
+
+        function setupTheme() {
+            const savedTheme = localStorage.getItem('docScannerTheme') || 'dark';
+            document.body.setAttribute('data-theme', savedTheme);
+            updateThemeIcons(savedTheme);
+        }
+        function toggleTheme() {
+            const currentTheme = document.body.getAttribute('data-theme');
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            document.body.setAttribute('data-theme', newTheme);
+            localStorage.setItem('docScannerTheme', newTheme);
+            updateThemeIcons(newTheme);
+        }
+        function updateThemeIcons(theme) {
+            const themeIconSun = document.getElementById('theme-icon-sun');
+            const themeIconMoon = document.getElementById('theme-icon-moon');
+            if (theme === 'dark') {
+                themeIconSun.classList.remove('hidden');
+                themeIconMoon.classList.add('hidden');
+            } else {
+                themeIconSun.classList.add('hidden');
+                themeIconMoon.classList.remove('hidden');
+            }
+        }
+        function showGlobalLoader(show, text = 'Processing...') {
+            // This is a placeholder for a global loader if you add one outside the scanner view
+            const scannerLoader = document.getElementById('scanner-loader');
+            const scannerLoaderText = document.getElementById('scanner-loader-text');
+            if (scannerLoader) {
+                scannerLoader.style.display = show ? 'flex' : 'none';
+                scannerLoaderText.textContent = text;
+            }
+        }
+
+        // --- Run App ---
+        initApp();
+
+    </script>
+</body>
+
+</html>
