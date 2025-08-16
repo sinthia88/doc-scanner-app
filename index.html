@@ -4,50 +4,75 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DocScanner - Web-based Document Scanner</title>
+    <title>DocScanner - Advanced Document Scanner</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- jsPDF for PDF export -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <!-- Draggable library for corner points -->
+    <!-- Draggable library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.11.5/gsap.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.11.5/Draggable.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- SortableJS for thumbnails -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+    <!-- JSZip for batch downloads -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
-        :root {
-            --primary-color: #3b82f6;
-            --secondary-color: #1f2937;
-            --background-color: #f9fafb;
-            --card-background: #ffffff;
+        /* Light Theme Variables */
+        :root,
+        [data-theme="light"] {
+            --primary-glow: #4f46e5;
+            --secondary-glow: #d946ef;
+            --bg-start: #f9fafb;
+            --bg-end: #e5e7eb;
+            --card-bg: #ffffff;
+            --text-primary: #111827;
+            --text-secondary: #4b5563;
+            --border-color: #d1d5db;
+            --input-bg: #f3f4f6;
+            --btn-secondary-bg: #e5e7eb;
+            --btn-secondary-hover: #d1d5db;
+        }
+
+        /* Dark Theme Variables */
+        [data-theme="dark"] {
+            --primary-glow: #6366f1;
+            --secondary-glow: #ec4899;
+            --bg-start: #111827;
+            --bg-end: #1f2937;
+            --card-bg: #1f2937;
+            --text-primary: #f9fafb;
+            --text-secondary: #9ca3af;
+            --border-color: #374151;
+            --input-bg: #374151;
+            --btn-secondary-bg: #374151;
+            --btn-secondary-hover: #4b5563;
         }
 
         body {
             font-family: 'Inter', sans-serif;
-            background-color: var(--background-color);
+            background: linear-gradient(135deg, var(--bg-start), var(--bg-end));
+            color: var(--text-primary);
+            transition: background 0.3s ease, color 0.3s ease;
         }
 
         .corner-handle {
             position: absolute;
             width: 20px;
             height: 20px;
-            background-color: rgba(59, 130, 246, 0.7);
+            background-color: rgba(99, 102, 241, 0.7);
             border-radius: 50%;
             border: 2px solid white;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+            box-shadow: 0 0 15px var(--primary-glow);
             cursor: move;
             touch-action: none;
-            /* Prevent scrolling on touch devices */
-        }
-
-        .corner-handle:hover {
-            transform: scale(1.2);
         }
 
         .loader {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid var(--primary-color);
+            border: 4px solid var(--border-color);
+            border-top: 4px solid var(--primary-glow);
             border-radius: 50%;
-            width: 40px;
-            height: 40px;
+            width: 50px;
+            height: 50px;
             animation: spin 1s linear infinite;
         }
 
@@ -62,128 +87,376 @@
         }
 
         .tab-button.active {
-            background-color: var(--primary-color);
+            background-color: var(--primary-glow);
             color: white;
+        }
+
+        .tool-btn.active {
+            background-color: var(--primary-glow);
+            color: white;
+            box-shadow: 0 0 10px var(--primary-glow);
+        }
+
+        .thumbnail {
+            border: 3px solid transparent;
+            cursor: grab;
+            transition: all 0.2s ease-in-out;
+            background-color: var(--bg-start);
+        }
+
+        .thumbnail.active {
+            border-color: var(--primary-glow);
+            box-shadow: 0 0 15px var(--primary-glow);
+            transform: scale(1.05);
+        }
+
+        .delete-page-btn {
+            position: absolute;
+            top: -10px;
+            right: -10px;
+            background-color: #ef4444;
+            color: white;
+            border-radius: 50%;
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            cursor: pointer;
+            opacity: 0;
+            transition: opacity 0.2s;
+            border: 2px solid var(--card-bg);
+        }
+
+        .thumbnail:hover .delete-page-btn {
+            opacity: 1;
+        }
+
+        .sortable-ghost {
+            opacity: 0.4;
+        }
+
+        .modal {
+            display: none;
+        }
+
+        .glass-card {
+            background: color-mix(in srgb, var(--card-bg) 70%, transparent);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border-color);
+            border-radius: 1.5rem;
+            transition: background 0.3s ease, border 0.3s ease;
+        }
+
+        .gradient-text {
+            background: linear-gradient(90deg, var(--primary-glow), var(--secondary-glow));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .btn-primary {
+            background: linear-gradient(90deg, var(--primary-glow), var(--secondary-glow));
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px color-mix(in srgb, var(--primary-glow) 40%, transparent);
+        }
+
+        .btn-secondary {
+            background-color: var(--btn-secondary-bg);
+            transition: all 0.3s ease;
+        }
+
+        .btn-secondary:hover {
+            background-color: var(--btn-secondary-hover);
+            transform: translateY(-2px);
+        }
+
+        .accordion-header {
+            width: 100%;
+            text-align: left;
+            padding: 0.75rem 1rem;
+            background-color: var(--btn-secondary-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+            font-weight: 600;
+            transition: all 0.2s;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .accordion-header:hover {
+            background-color: var(--btn-secondary-hover);
+        }
+
+        .accordion-header.active {
+            background-color: var(--primary-glow);
+            color: white;
+            border-bottom-left-radius: 0;
+            border-bottom-right-radius: 0;
+        }
+
+        .accordion-content {
+            display: none;
+            padding: 1rem;
+            background-color: color-mix(in srgb, var(--bg-start) 50%, transparent);
+            border: 1px solid var(--border-color);
+            border-top: none;
+            border-radius: 0 0 0.5rem 0.5rem;
+        }
+
+        .accordion-header .icon::after {
+            content: '+';
+            font-size: 1.5rem;
+            line-height: 1;
+            transition: transform 0.2s;
+        }
+
+        .accordion-header.active .icon::after {
+            transform: rotate(45deg);
+        }
+
+        input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 8px;
+            background: var(--border-color);
+            border-radius: 5px;
+            outline: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            background: var(--primary-glow);
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        input[type="range"]::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            background: var(--primary-glow);
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        #theme-toggle-btn {
+            position: absolute;
+            top: 1.5rem;
+            right: 1.5rem;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            background-color: var(--btn-secondary-bg);
+            color: var(--text-primary);
         }
     </style>
 </head>
 
-<body class="text-gray-800">
+<body data-theme="dark">
 
-    <div class="container mx-auto p-4 max-w-7xl">
-        <!-- Header -->
-        <header class="text-center mb-6">
-            <h1 class="text-4xl font-bold text-gray-900">DocScanner</h1>
-            <p class="text-lg text-gray-600 mt-2">A simple, powerful document scanner in your browser.</p>
+    <div class="container mx-auto p-4 max-w-7xl relative">
+        <header class="text-center mb-8">
+            <h1 class="text-5xl font-extrabold gradient-text">DocScanner</h1>
+            <p class="text-lg text-secondary mt-2">Your powerful, browser-based document scanner.</p>
         </header>
+
+        <button id="theme-toggle-btn" class="btn-secondary">
+            <svg id="theme-icon-sun" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
+                stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+            </svg>
+            <svg id="theme-icon-moon" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 hidden" fill="none"
+                viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+            </svg>
+        </button>
 
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <!-- Left Column: Input & Controls -->
-            <div class="bg-white p-6 rounded-2xl shadow-lg">
-                <h2 class="text-2xl font-semibold mb-4 border-b pb-2">1. Get Your Image</h2>
-
-                <!-- Tab Controls for Input -->
-                <div class="flex border border-gray-200 rounded-lg mb-4">
-                    <button id="tab-upload"
-                        class="tab-button flex-1 p-3 rounded-l-lg font-medium transition-colors duration-200">Upload
-                        File</button>
-                    <button id="tab-camera"
-                        class="tab-button flex-1 p-3 rounded-r-lg font-medium transition-colors duration-200">Use
-                        Camera</button>
-                </div>
-
-                <!-- Upload Section -->
-                <div id="upload-section">
-                    <label for="image-upload"
-                        class="w-full cursor-pointer bg-blue-50 hover:bg-blue-100 border-2 border-dashed border-blue-300 rounded-lg p-8 text-center block">
-                        <svg class="mx-auto h-12 w-12 text-blue-400" stroke="currentColor" fill="none"
-                            viewBox="0 0 48 48" aria-hidden="true">
-                            <path
-                                d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8"
-                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
-                        </svg>
-                        <span class="mt-2 block text-sm font-semibold text-blue-600">Click to upload an image</span>
-                        <span class="mt-1 block text-xs text-gray-500">PNG, JPG, WEBP up to 10MB</span>
-                    </label>
-                    <input type="file" id="image-upload" class="hidden" accept="image/*">
-                </div>
-
-                <!-- Camera Section -->
-                <div id="camera-section" class="hidden">
-                    <video id="video-feed" class="w-full rounded-lg bg-gray-900" playsinline></video>
-                    <div class="flex justify-center space-x-4 mt-4">
-                        <button id="start-camera"
-                            class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition-transform transform hover:scale-105">Start
+            <div id="left-column" class="glass-card p-6">
+                <div id="input-view">
+                    <h2 class="text-2xl font-bold mb-4 border-b border-gray-700 pb-2">1. Get Your Image</h2>
+                    <div class="flex border border-gray-700 rounded-lg mb-4">
+                        <button id="tab-upload" class="tab-button flex-1 p-3 rounded-l-lg font-medium">Upload
+                            File</button>
+                        <button id="tab-camera" class="tab-button flex-1 p-3 rounded-r-lg font-medium">Use
                             Camera</button>
-                        <button id="capture-photo"
-                            class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition-transform transform hover:scale-105"
-                            disabled>Capture</button>
+                    </div>
+                    <div id="upload-section">
+                        <label for="image-upload"
+                            class="w-full cursor-pointer bg-gray-800 hover:bg-gray-700 border-2 border-dashed border-gray-600 rounded-lg p-8 text-center block transition">
+                            <svg class="mx-auto h-12 w-12 text-gray-500" fill="none" viewBox="0 0 24 24"
+                                stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M7 16a4 4 0 01-4-4V6a4 4 0 014-4h6a4 4 0 014 4v6a4 4 0 01-4 4H7z"></path>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2h2"></path>
+                            </svg>
+                            <span class="mt-2 block text-sm font-semibold text-gray-400">Click to upload an image</span>
+                        </label>
+                        <input type="file" id="image-upload" class="hidden" accept="image/*">
+                    </div>
+                    <div id="camera-section" class="hidden">
+                        <video id="video-feed" class="w-full rounded-lg bg-black" playsinline></video>
+                        <div class="flex justify-center space-x-4 mt-4">
+                            <button id="start-camera"
+                                class="btn-secondary text-white font-bold py-2 px-4 rounded-lg">Start</button>
+                            <button id="capture-photo" class="btn-primary text-white font-bold py-2 px-4 rounded-lg"
+                                disabled>Capture</button>
+                        </div>
                     </div>
                 </div>
 
                 <!-- Controls Section -->
-                <div id="controls-section" class="mt-6 hidden">
-                    <h2 class="text-2xl font-semibold mb-4 border-b pb-2">2. Adjust & Enhance</h2>
-                    <div class="space-y-4">
-                        <button id="detect-edges"
-                            class="w-full bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg transition-transform transform hover:scale-105">Apply
-                            Perspective Correction</button>
+                <div id="controls-section" class="hidden space-y-2">
+                    <h2 class="text-2xl font-bold mb-2">Editing Page <span id="page-number-display"
+                            class="gradient-text"></span></h2>
 
-                        <div>
-                            <label for="brightness" class="font-medium">Brightness: <span
-                                    id="brightness-value">0</span></label>
-                            <input type="range" id="brightness" min="-100" max="100" value="0"
-                                class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
-                        </div>
-                        <div>
-                            <label for="contrast" class="font-medium">Contrast: <span
-                                    id="contrast-value">0</span></label>
-                            <input type="range" id="contrast" min="-100" max="100" value="0"
-                                class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
-                        </div>
-
-                        <div class="grid grid-cols-2 gap-4 pt-2">
-                            <button id="grayscale"
-                                class="filter-btn bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg">Grayscale</button>
-                            <button id="magic-color"
-                                class="filter-btn bg-purple-500 hover:bg-purple-600 text-white font-bold py-2 px-4 rounded-lg">Magic
-                                Color</button>
-                            <button id="reset-filters"
-                                class="col-span-2 bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg">Reset
-                                All</button>
+                    <div class="accordion-item">
+                        <button class="accordion-header"><span>Edit & Correct</span><span class="icon"></span></button>
+                        <div class="accordion-content space-y-6">
+                            <div>
+                                <h3 class="text-lg font-semibold mb-2">Page Tools</h3>
+                                <div class="space-y-4">
+                                    <button id="crop-and-warp"
+                                        class="w-full btn-primary text-white font-bold py-3 px-4 rounded-lg">Crop &
+                                        Straighten</button>
+                                    <button id="rotate-page"
+                                        class="w-full btn-secondary text-white font-bold py-3 px-4 rounded-lg">Rotate
+                                        Page</button>
+                                </div>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold mb-2">Document Style</h3>
+                                <div class="grid grid-cols-2 gap-4">
+                                    <button id="preset-auto-color"
+                                        class="preset-btn btn-secondary text-white font-bold py-2 px-4 rounded-lg">Auto
+                                        Color</button>
+                                    <button id="preset-bw"
+                                        class="preset-btn btn-secondary text-white font-bold py-2 px-4 rounded-lg">B&W</button>
+                                    <button id="preset-color"
+                                        class="preset-btn btn-secondary text-white font-bold py-2 px-4 rounded-lg">Color
+                                        Doc</button>
+                                    <button id="preset-grayscale"
+                                        class="preset-btn btn-secondary text-white font-bold py-2 px-4 rounded-lg">Grayscale</button>
+                                </div>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold mb-2">Fine-Tune</h3>
+                                <div class="space-y-4">
+                                    <div>
+                                        <label for="brightness" class="font-medium">Brightness: <span
+                                                id="brightness-value">0</span></label>
+                                        <input type="range" id="brightness" min="-50" max="50" value="0">
+                                    </div>
+                                    <div>
+                                        <label for="contrast" class="font-medium">Contrast: <span
+                                                id="contrast-value">0</span></label>
+                                        <input type="range" id="contrast" min="-50" max="50" value="0">
+                                    </div>
+                                </div>
+                            </div>
+                            <button id="reset-page"
+                                class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition">Reset
+                                Current Page</button>
                         </div>
                     </div>
 
-                    <h2 class="text-2xl font-semibold mt-8 mb-4 border-b pb-2">3. Export</h2>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <button id="download-jpg"
-                            class="bg-teal-500 hover:bg-teal-600 text-white font-bold py-3 px-4 rounded-lg transition-transform transform hover:scale-105">Download
-                            JPG</button>
-                        <button id="download-pdf"
-                            class="bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 px-4 rounded-lg transition-transform transform hover:scale-105">Download
-                            PDF</button>
+                    <div class="accordion-item">
+                        <button class="accordion-header"><span>Annotate</span><span class="icon"></span></button>
+                        <div class="accordion-content space-y-6">
+                            <div>
+                                <h3 class="text-lg font-semibold mb-2">Annotation Tools</h3>
+                                <div class="grid grid-cols-3 gap-4">
+                                    <button id="tool-cursor"
+                                        class="tool-btn p-2 border border-gray-600 rounded-lg transition">Cursor</button>
+                                    <button id="tool-text"
+                                        class="tool-btn p-2 border border-gray-600 rounded-lg transition">Add
+                                        Text</button>
+                                    <button id="tool-highlight"
+                                        class="tool-btn p-2 border border-gray-600 rounded-lg transition">Highlight</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="accordion-item">
+                        <button class="accordion-header"><span>Export</span><span class="icon"></span></button>
+                        <div class="accordion-content space-y-6">
+                            <div>
+                                <h3 class="text-lg font-semibold mb-2">Export Options</h3>
+                                <div class="space-y-4">
+                                    <div>
+                                        <label for="quality-slider" class="font-medium">JPG Quality: <span
+                                                id="quality-value">90</span>%</label>
+                                        <input type="range" id="quality-slider" min="10" max="100" value="90">
+                                    </div>
+                                    <div>
+                                        <label for="pdf-password" class="font-medium">PDF Password (Optional)</label>
+                                        <input type="password" id="pdf-password"
+                                            class="w-full p-2 border bg-gray-800 border-gray-600 rounded-lg text-white"
+                                            placeholder="Enter password to encrypt">
+                                    </div>
+                                </div>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold mb-2">Download</h3>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <button id="download-jpg"
+                                        class="btn-secondary text-white font-bold py-3 px-4 rounded-lg">Page
+                                        (JPG)</button>
+                                    <button id="download-zip"
+                                        class="btn-secondary text-white font-bold py-3 px-4 rounded-lg">All
+                                        (ZIP)</button>
+                                    <button id="download-pdf"
+                                        class="md:col-span-2 btn-primary text-white font-bold py-3 px-4 rounded-lg">Download
+                                        All (PDF)</button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Right Column: Image Preview -->
-            <div class="bg-white p-6 rounded-2xl shadow-lg relative min-h-[400px] flex items-center justify-center">
-                <div id="image-container" class="relative w-full h-full max-w-full max-h-full overflow-auto">
-                    <canvas id="canvas" class="rounded-lg shadow-md"></canvas>
-                    <!-- Corner handles will be injected here by JS -->
+            <!-- Right Column: Image Preview & Thumbnails -->
+            <div class="flex flex-col gap-8">
+                <div class="glass-card p-6 relative min-h-[400px] flex items-center justify-center flex-grow">
+                    <div id="image-container" class="relative w-full h-full max-w-full max-h-full">
+                        <canvas id="canvas" class="rounded-lg shadow-lg"></canvas>
+                    </div>
+                    <div id="placeholder-text" class="text-gray-500 text-center">
+                        <svg class="mx-auto h-24 w-24" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1"
+                                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z">
+                            </path>
+                        </svg>
+                        <p class="mt-2 font-medium">Your image will appear here</p>
+                    </div>
+                    <div id="loader" class="absolute hidden flex-col items-center justify-center">
+                        <div class="loader"></div>
+                        <p id="loader-text" class="mt-4 font-semibold text-gray-300">Processing...</p>
+                    </div>
                 </div>
-                <div id="placeholder-text" class="text-gray-400 text-center">
-                    <svg class="mx-auto h-24 w-24 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                        xmlns="http://www.w3.org/2000/svg">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1"
-                            d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z">
-                        </path>
-                    </svg>
-                    <p class="mt-2 font-medium">Your image will appear here</p>
-                </div>
-                <div id="loader" class="absolute hidden">
-                    <div class="loader"></div>
-                    <p class="mt-4 font-semibold text-gray-600">Processing...</p>
+                <div id="thumbnail-container" class="glass-card p-4 hidden">
+                    <div id="thumbnail-strip" class="flex items-center gap-4 overflow-x-auto pb-2"></div>
+                    <button id="add-page-btn"
+                        class="w-full mt-4 btn-primary text-white font-bold py-2 px-4 rounded-lg">Add New Page</button>
                 </div>
             </div>
         </div>
@@ -191,6 +464,8 @@
 
     <script>
         // DOM Elements
+        const inputView = document.getElementById('input-view');
+        const controlsSection = document.getElementById('controls-section');
         const tabUpload = document.getElementById('tab-upload');
         const tabCamera = document.getElementById('tab-camera');
         const uploadSection = document.getElementById('upload-section');
@@ -199,455 +474,629 @@
         const videoFeed = document.getElementById('video-feed');
         const startCameraBtn = document.getElementById('start-camera');
         const capturePhotoBtn = document.getElementById('capture-photo');
-        const controlsSection = document.getElementById('controls-section');
         const imageContainer = document.getElementById('image-container');
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
         const placeholderText = document.getElementById('placeholder-text');
         const loader = document.getElementById('loader');
+        const loaderText = document.getElementById('loader-text');
+        const thumbnailContainer = document.getElementById('thumbnail-container');
+        const thumbnailStrip = document.getElementById('thumbnail-strip');
+        const addPageBtn = document.getElementById('add-page-btn');
+        const pageNumberDisplay = document.getElementById('page-number-display');
+        const themeToggleBtn = document.getElementById('theme-toggle-btn');
+        const themeIconSun = document.getElementById('theme-icon-sun');
+        const themeIconMoon = document.getElementById('theme-icon-moon');
 
-        // Control Buttons
-        const detectEdgesBtn = document.getElementById('detect-edges');
+        // Control Buttons & Sliders
+        const cropAndWarpBtn = document.getElementById('crop-and-warp');
+        const rotatePageBtn = document.getElementById('rotate-page');
         const brightnessSlider = document.getElementById('brightness');
         const contrastSlider = document.getElementById('contrast');
-        const grayscaleBtn = document.getElementById('grayscale');
-        const magicColorBtn = document.getElementById('magic-color');
-        const resetFiltersBtn = document.getElementById('reset-filters');
+        const qualitySlider = document.getElementById('quality-slider');
+        const pdfPasswordInput = document.getElementById('pdf-password');
+        const presetAutoColorBtn = document.getElementById('preset-auto-color');
+        const presetBwBtn = document.getElementById('preset-bw');
+        const presetColorBtn = document.getElementById('preset-color');
+        const presetGrayscaleBtn = document.getElementById('preset-grayscale');
+        const resetPageBtn = document.getElementById('reset-page');
         const downloadJpgBtn = document.getElementById('download-jpg');
+        const downloadZipBtn = document.getElementById('download-zip');
         const downloadPdfBtn = document.getElementById('download-pdf');
 
-        // Value Displays
-        const brightnessValue = document.getElementById('brightness-value');
-        const contrastValue = document.getElementById('contrast-value');
+        // Tool Buttons
+        const toolCursorBtn = document.getElementById('tool-cursor');
+        const toolTextBtn = document.getElementById('tool-text');
+        const toolHighlightBtn = document.getElementById('tool-highlight');
 
         // State variables
-        let originalImage = null;
-        let currentImage = null;
+        let pages = [];
+        let currentPageId = null;
         let stream = null;
         let cornerHandles = [];
         let draggableInstances = [];
+        let currentTool = 'cursor';
+        let isDrawingHighlight = false;
+        let highlightStartX = 0, highlightStartY = 0;
 
         // --- Initialization ---
         function init() {
             setupTabs();
             setupEventListeners();
+            setupAccordion();
+            setupTheme();
             gsap.registerPlugin(Draggable);
+            new Sortable(thumbnailStrip, {
+                animation: 150,
+                ghostClass: 'sortable-ghost',
+                onEnd: onPageReorder,
+            });
+            setActiveTool('cursor');
         }
 
         function setupTabs() {
             tabUpload.classList.add('active');
-            tabUpload.addEventListener('click', () => switchTab('upload'));
-            tabCamera.addEventListener('click', () => switchTab('camera'));
         }
 
         function switchTab(tabName) {
-            if (tabName === 'upload') {
-                tabUpload.classList.add('active');
-                tabCamera.classList.remove('active');
-                uploadSection.classList.remove('hidden');
-                cameraSection.classList.add('hidden');
-                stopCamera();
-            } else {
-                tabCamera.classList.add('active');
-                tabUpload.classList.remove('active');
-                cameraSection.classList.remove('hidden');
-                uploadSection.classList.add('hidden');
-            }
+            tabUpload.classList.toggle('active', tabName === 'upload');
+            tabCamera.classList.toggle('active', tabName === 'camera');
+            uploadSection.classList.toggle('hidden', tabName !== 'upload');
+            cameraSection.classList.toggle('hidden', tabName === 'upload');
+            if (tabName === 'upload') stopCamera(stream);
         }
 
         function setupEventListeners() {
+            tabUpload.addEventListener('click', () => switchTab('upload'));
+            tabCamera.addEventListener('click', () => switchTab('camera'));
             imageUpload.addEventListener('change', handleImageUpload);
             startCameraBtn.addEventListener('click', startCamera);
             capturePhotoBtn.addEventListener('click', capturePhoto);
-            detectEdgesBtn.addEventListener('click', applyPerspectiveTransform);
-            brightnessSlider.addEventListener('input', () => applyFilters(false));
-            contrastSlider.addEventListener('input', () => applyFilters(false));
-            grayscaleBtn.addEventListener('click', applyGrayscale);
-            magicColorBtn.addEventListener('click', applyMagicColor);
-            resetFiltersBtn.addEventListener('click', resetAll);
+            addPageBtn.addEventListener('click', showInputView);
+            cropAndWarpBtn.addEventListener('click', applyPerspectiveTransform);
+            rotatePageBtn.addEventListener('click', rotateCurrentPage);
+            themeToggleBtn.addEventListener('click', toggleTheme);
+
+            // Tools
+            toolCursorBtn.addEventListener('click', () => setActiveTool('cursor'));
+            toolTextBtn.addEventListener('click', () => setActiveTool('text'));
+            toolHighlightBtn.addEventListener('click', () => setActiveTool('highlight'));
+            canvas.addEventListener('mousedown', onCanvasMouseDown);
+            canvas.addEventListener('mousemove', onCanvasMouseMove);
+            canvas.addEventListener('mouseup', onCanvasMouseUp);
+            canvas.addEventListener('click', onCanvasClick);
+
+            // Presets & Adjustments
+            qualitySlider.addEventListener('input', () => document.getElementById('quality-value').textContent = qualitySlider.value);
+            presetAutoColorBtn.addEventListener('click', () => applyPreset('contrast(150%) brightness(110%) saturate(110%)'));
+            presetBwBtn.addEventListener('click', () => applyPreset('grayscale(100%) contrast(180%) brightness(110%)'));
+            presetColorBtn.addEventListener('click', () => applyPreset('contrast(140%) brightness(105%) saturate(120%)'));
+            presetGrayscaleBtn.addEventListener('click', () => applyPreset('grayscale(100%)'));
+            resetPageBtn.addEventListener('click', resetCurrentPage);
+
+            // Export
             downloadJpgBtn.addEventListener('click', downloadJpg);
+            downloadZipBtn.addEventListener('click', downloadZip);
             downloadPdfBtn.addEventListener('click', downloadPdf);
         }
 
-        // --- Image Input ---
+        // --- View Management & State ---
+        function showInputView() { inputView.classList.remove('hidden'); controlsSection.classList.add('hidden'); }
+        function showControlsView() {
+            inputView.classList.add('hidden');
+            controlsSection.classList.remove('hidden');
+            // Open the first accordion by default
+            const firstHeader = document.querySelector('.accordion-header');
+            if (firstHeader) {
+                firstHeader.classList.add('active');
+                firstHeader.nextElementSibling.style.display = 'block';
+            }
+        }
+
+        function setupAccordion() {
+            const accordionHeaders = document.querySelectorAll('.accordion-header');
+            accordionHeaders.forEach(header => {
+                header.addEventListener('click', () => {
+                    const content = header.nextElementSibling;
+                    const isActive = header.classList.contains('active');
+
+                    // Close all accordions
+                    accordionHeaders.forEach(h => {
+                        h.classList.remove('active');
+                        h.nextElementSibling.style.display = 'none';
+                    });
+
+                    // If it wasn't active, open it
+                    if (!isActive) {
+                        header.classList.add('active');
+                        content.style.display = 'block';
+                    }
+                });
+            });
+        }
+
+        function setActiveTool(tool) {
+            currentTool = tool;
+            toolCursorBtn.classList.toggle('active', tool === 'cursor');
+            toolTextBtn.classList.toggle('active', tool === 'text');
+            toolHighlightBtn.classList.toggle('active', tool === 'highlight');
+            canvas.style.cursor = tool === 'cursor' ? 'default' : 'crosshair';
+        }
+
+        // --- Theme Management ---
+        function setupTheme() {
+            const savedTheme = localStorage.getItem('docScannerTheme') || 'dark';
+            document.body.setAttribute('data-theme', savedTheme);
+            updateThemeIcons(savedTheme);
+        }
+
+        function toggleTheme() {
+            const currentTheme = document.body.getAttribute('data-theme');
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            document.body.setAttribute('data-theme', newTheme);
+            localStorage.setItem('docScannerTheme', newTheme);
+            updateThemeIcons(newTheme);
+        }
+
+        function updateThemeIcons(theme) {
+            if (theme === 'dark') {
+                themeIconSun.classList.remove('hidden');
+                themeIconMoon.classList.add('hidden');
+            } else {
+                themeIconSun.classList.add('hidden');
+                themeIconMoon.classList.remove('hidden');
+            }
+        }
+
+        // --- Page Management ---
+        function addPage(img) {
+            const page = { id: Date.now(), originalImage: img, processedImage: img, activeFilter: 'none', overlays: [] };
+            pages.push(page);
+            setCurrentPage(page.id);
+            thumbnailContainer.classList.remove('hidden');
+            renderThumbnails();
+            showControlsView();
+        }
+
+        function setCurrentPage(pageId) {
+            currentPageId = pageId;
+            const page = pages.find(p => p.id === pageId);
+            if (!page) return;
+            displayImageOnCanvas(page.processedImage);
+            const pageIndex = pages.findIndex(p => p.id === pageId);
+            pageNumberDisplay.textContent = `(#${pageIndex + 1})`;
+            renderThumbnails();
+        }
+
+        function deletePage(pageId) {
+            pages = pages.filter(p => p.id !== pageId);
+            if (currentPageId === pageId) {
+                currentPageId = pages.length > 0 ? pages[0].id : null;
+            }
+            if (!currentPageId) {
+                placeholderText.classList.remove('hidden');
+                canvas.style.display = 'none';
+                thumbnailContainer.classList.add('hidden');
+                showInputView();
+            } else {
+                setCurrentPage(currentPageId);
+            }
+            renderThumbnails();
+        }
+
+        function onPageReorder(evt) {
+            const movedPage = pages.splice(evt.oldIndex, 1)[0];
+            pages.splice(evt.newIndex, 0, movedPage);
+            renderThumbnails();
+        }
+
+        // --- Image Input & Camera ---
         function handleImageUpload(e) {
             const file = e.target.files[0];
             if (file) {
                 const reader = new FileReader();
-                reader.onload = (event) => {
-                    const img = new Image();
-                    img.onload = () => {
-                        originalImage = img;
-                        currentImage = img;
-                        displayImage(img);
-                    };
-                    img.src = event.target.result;
-                };
+                reader.onload = (event) => { const img = new Image(); img.onload = () => addPage(img); img.src = event.target.result; };
                 reader.readAsDataURL(file);
             }
         }
 
         async function startCamera() {
             try {
-                if (stream) {
-                    stopCamera();
-                    return;
-                }
+                if (stream) { stopCamera(stream); stream = null; return; }
                 stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
                 videoFeed.srcObject = stream;
                 videoFeed.play();
                 startCameraBtn.textContent = 'Stop Camera';
                 startCameraBtn.classList.replace('bg-green-500', 'bg-red-500');
-                startCameraBtn.classList.replace('hover:bg-green-600', 'hover:bg-red-600');
                 capturePhotoBtn.disabled = false;
-            } catch (err) {
-                console.error("Error accessing camera:", err);
-                alert("Could not access the camera. Please ensure you have given permission.");
-            }
+            } catch (err) { console.error("Error accessing camera:", err); }
         }
 
-        function stopCamera() {
-            if (stream) {
-                stream.getTracks().forEach(track => track.stop());
-                stream = null;
-                videoFeed.srcObject = null;
-                startCameraBtn.textContent = 'Start Camera';
-                startCameraBtn.classList.replace('bg-red-500', 'bg-green-500');
-                startCameraBtn.classList.replace('hover:bg-red-600', 'hover:bg-green-600');
-                capturePhotoBtn.disabled = true;
+        function stopCamera(streamToStop, buttonToReset = startCameraBtn) {
+            if (streamToStop) {
+                streamToStop.getTracks().forEach(track => track.stop());
+                if (buttonToReset) {
+                    buttonToReset.textContent = 'Start Camera';
+                    buttonToReset.classList.replace('bg-red-500', 'bg-green-500');
+                }
             }
+            if (buttonToReset === startCameraBtn) { capturePhotoBtn.disabled = true; }
         }
 
         function capturePhoto() {
             const tempCanvas = document.createElement('canvas');
             tempCanvas.width = videoFeed.videoWidth;
             tempCanvas.height = videoFeed.videoHeight;
-            const tempCtx = tempCanvas.getContext('2d');
-            tempCtx.drawImage(videoFeed, 0, 0, tempCanvas.width, tempCanvas.height);
-
+            tempCanvas.getContext('2d').drawImage(videoFeed, 0, 0);
             const img = new Image();
-            img.onload = () => {
-                originalImage = img;
-                currentImage = img;
-                displayImage(img);
-                stopCamera();
-            };
+            img.onload = () => { addPage(img); stopCamera(stream); stream = null; };
             img.src = tempCanvas.toDataURL('image/webp');
         }
 
         // --- Image Display and Manipulation ---
-        function displayImage(img) {
+        function displayImageOnCanvas(img) {
             placeholderText.classList.add('hidden');
-            controlsSection.classList.remove('hidden');
-
-            // Resize canvas to fit container while maintaining aspect ratio
+            canvas.style.display = 'block';
             const containerWidth = imageContainer.clientWidth;
             const containerHeight = imageContainer.clientHeight;
             const imgAspectRatio = img.width / img.height;
-
-            let newWidth = containerWidth;
-            let newHeight = newWidth / imgAspectRatio;
-
-            if (newHeight > containerHeight) {
-                newHeight = containerHeight;
-                newWidth = newHeight * imgAspectRatio;
-            }
-
-            canvas.width = newWidth;
-            canvas.height = newHeight;
-
-            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            let newWidth = containerWidth, newHeight = newWidth / imgAspectRatio;
+            if (newHeight > containerHeight) { newHeight = containerHeight; newWidth = newHeight * imgAspectRatio; }
+            canvas.width = newWidth; canvas.height = newHeight;
             createCornerHandles();
         }
 
         function createCornerHandles() {
-            // Clear existing handles
             cornerHandles.forEach(h => h.remove());
             draggableInstances.forEach(d => d.kill());
-            cornerHandles = [];
-            draggableInstances = [];
-
+            cornerHandles = []; draggableInstances = [];
             const padding = 10;
-            const positions = [
-                { x: padding, y: padding }, // Top-left
-                { x: canvas.width - padding, y: padding }, // Top-right
-                { x: canvas.width - padding, y: canvas.height - padding }, // Bottom-right
-                { x: padding, y: canvas.height - padding } // Bottom-left
-            ];
-
-            positions.forEach((pos, i) => {
+            const positions = [{ x: padding, y: padding }, { x: canvas.width - padding, y: padding }, { x: canvas.width - padding, y: canvas.height - padding }, { x: padding, y: canvas.height - padding }];
+            positions.forEach((pos) => {
                 const handle = document.createElement('div');
                 handle.className = 'corner-handle';
-                handle.id = `handle-${i}`;
                 imageContainer.appendChild(handle);
-                gsap.set(handle, { x: pos.x - 10, y: pos.y - 10 }); // Center handle on position
+                gsap.set(handle, { x: pos.x - 10, y: pos.y - 10 });
                 cornerHandles.push(handle);
-
-                const dragInstance = Draggable.create(handle, {
-                    bounds: canvas,
-                    onDrag: () => drawOverlay(),
-                    onPress: () => drawOverlay()
-                })[0];
+                const dragInstance = Draggable.create(handle, { bounds: canvas, onDrag: drawOverlay, onPress: drawOverlay })[0];
                 draggableInstances.push(dragInstance);
             });
             drawOverlay();
         }
 
         function drawOverlay() {
-            // Redraw image to clear previous overlay
-            ctx.drawImage(currentImage, 0, 0, canvas.width, canvas.height);
+            const page = pages.find(p => p.id === currentPageId);
+            if (!page) return;
 
-            if (cornerHandles.length !== 4) return;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.filter = page.activeFilter;
+            ctx.drawImage(page.processedImage, 0, 0, canvas.width, canvas.height);
+            ctx.filter = 'none';
 
-            const points = cornerHandles.map(h => ({
-                x: gsap.getProperty(h, "x") + 10,
-                y: gsap.getProperty(h, "y") + 10
-            }));
+            // Draw overlays (text, highlights)
+            page.overlays.forEach(overlay => {
+                const scaleX = canvas.width / page.processedImage.width;
+                const scaleY = canvas.height / page.processedImage.height;
+                if (overlay.type === 'text') {
+                    ctx.font = `${overlay.size * scaleY}px sans-serif`;
+                    ctx.fillStyle = 'black';
+                    ctx.fillText(overlay.text, overlay.x * scaleX, overlay.y * scaleY);
+                } else if (overlay.type === 'highlight') {
+                    ctx.fillStyle = 'rgba(255, 255, 0, 0.4)';
+                    ctx.fillRect(overlay.x * scaleX, overlay.y * scaleY, overlay.width * scaleX, overlay.height * scaleY);
+                }
+            });
 
-            ctx.beginPath();
-            ctx.moveTo(points[0].x, points[0].y);
-            for (let i = 1; i < points.length; i++) {
-                ctx.lineTo(points[i].x, points[i].y);
+            // Draw corner handles and selection box
+            if (cornerHandles.length === 4) {
+                const points = cornerHandles.map(h => ({ x: gsap.getProperty(h, "x") + 10, y: gsap.getProperty(h, "y") + 10 }));
+                ctx.beginPath();
+                ctx.moveTo(points[0].x, points[0].y);
+                points.forEach(p => ctx.lineTo(p.x, p.y));
+                ctx.closePath();
+                ctx.fillStyle = 'rgba(59, 130, 246, 0.2)';
+                ctx.fill();
+                ctx.strokeStyle = 'rgba(59, 130, 246, 1)';
+                ctx.lineWidth = 2;
+                ctx.stroke();
             }
-            ctx.closePath();
-
-            ctx.fillStyle = 'rgba(59, 130, 246, 0.2)';
-            ctx.fill();
-            ctx.strokeStyle = 'rgba(59, 130, 246, 1)';
-            ctx.lineWidth = 2;
-            ctx.stroke();
         }
 
         function applyPerspectiveTransform() {
-            if (!currentImage || cornerHandles.length !== 4) return;
-
-            showLoader(true);
-
-            // Using a timeout to allow the UI to update and show the loader
+            const page = pages.find(p => p.id === currentPageId);
+            if (!page || cornerHandles.length !== 4) return;
+            showLoader(true, "Cropping...");
             setTimeout(() => {
                 const cornerPoints = cornerHandles.map(h => ({
-                    x: (gsap.getProperty(h, "x") + 10) * (originalImage.width / canvas.width),
-                    y: (gsap.getProperty(h, "y") + 10) * (originalImage.height / canvas.height)
+                    x: (gsap.getProperty(h, "x") + 10) * (page.originalImage.width / canvas.width),
+                    y: (gsap.getProperty(h, "y") + 10) * (page.originalImage.height / canvas.height)
                 }));
-
-                const [tl, tr, br, bl] = cornerPoints;
-
-                // Calculate the dimensions of the new image
-                const widthA = Math.sqrt(Math.pow(br.x - bl.x, 2) + Math.pow(br.y - bl.y, 2));
-                const widthB = Math.sqrt(Math.pow(tr.x - tl.x, 2) + Math.pow(tr.y - tl.y, 2));
-                const maxWidth = Math.max(widthA, widthB);
-
-                const heightA = Math.sqrt(Math.pow(tr.x - br.x, 2) + Math.pow(tr.y - br.y, 2));
-                const heightB = Math.sqrt(Math.pow(tl.x - bl.x, 2) + Math.pow(tl.y - bl.y, 2));
-                const maxHeight = Math.max(heightA, heightB);
-
-                const transformedImage = perspectiveWarp(originalImage, cornerPoints, maxWidth, maxHeight);
-
+                const maxWidth = Math.max(Math.hypot(cornerPoints[2].x - cornerPoints[3].x, cornerPoints[2].y - cornerPoints[3].y), Math.hypot(cornerPoints[1].x - cornerPoints[0].x, cornerPoints[1].y - cornerPoints[0].y));
+                const maxHeight = Math.max(Math.hypot(cornerPoints[1].x - cornerPoints[2].x, cornerPoints[1].y - cornerPoints[2].y), Math.hypot(cornerPoints[0].x - cornerPoints[3].x, cornerPoints[0].y - cornerPoints[3].y));
+                const transformedDataUrl = perspectiveWarp(page.originalImage, cornerPoints, maxWidth, maxHeight);
                 const img = new Image();
                 img.onload = () => {
-                    currentImage = img;
-                    displayImage(img);
+                    page.processedImage = img;
+                    page.overlays = [];
+                    displayImageOnCanvas(img);
+                    renderThumbnails();
                     showLoader(false);
                 };
-                img.src = transformedImage;
+                img.src = transformedDataUrl;
             }, 50);
         }
 
-        // --- Image Filters ---
-        function applyFilters(fromButton = true) {
-            if (!currentImage) return;
-
-            // Update value displays
-            brightnessValue.textContent = brightnessSlider.value;
-            contrastValue.textContent = contrastSlider.value;
-
-            if (fromButton) return; // Debounce for sliders
-
+        function rotateCurrentPage() {
+            const page = pages.find(p => p.id === currentPageId);
+            if (!page) return;
+            const img = page.processedImage;
             const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = currentImage.width;
-            tempCanvas.height = currentImage.height;
+            tempCanvas.width = img.height; tempCanvas.height = img.width;
             const tempCtx = tempCanvas.getContext('2d');
-            tempCtx.drawImage(currentImage, 0, 0);
+            tempCtx.translate(img.height / 2, img.width / 2);
+            tempCtx.rotate(90 * Math.PI / 180);
+            tempCtx.drawImage(img, -img.width / 2, -img.height / 2);
+            const rotatedImage = new Image();
+            rotatedImage.onload = () => {
+                page.processedImage = rotatedImage;
+                page.overlays = [];
+                displayImageOnCanvas(rotatedImage);
+                renderThumbnails();
+            };
+            rotatedImage.src = tempCanvas.toDataURL();
+        }
 
-            const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
-            const data = imageData.data;
-            const brightness = parseInt(brightnessSlider.value);
-            const contrast = parseInt(contrastSlider.value);
-            const factor = (259 * (contrast + 255)) / (255 * (259 - contrast));
+        // --- Filters & Annotations ---
+        function applyPreset(filterString) {
+            const page = pages.find(p => p.id === currentPageId);
+            if (page) { page.activeFilter = filterString; drawOverlay(); }
+        }
 
-            for (let i = 0; i < data.length; i += 4) {
-                // Brightness
-                data[i] += brightness;
-                data[i + 1] += brightness;
-                data[i + 2] += brightness;
+        function applyManualFilters() {
+            const page = pages.find(p => p.id === currentPageId);
+            if (!page) return;
+            const brightness = 100 + parseInt(brightnessSlider.value);
+            const contrast = 100 + parseInt(contrastSlider.value);
+            page.activeFilter = `brightness(${brightness}%) contrast(${contrast}%)`;
+            drawOverlay();
+        }
 
-                // Contrast
-                data[i] = factor * (data[i] - 128) + 128;
-                data[i + 1] = factor * (data[i + 1] - 128) + 128;
-                data[i + 2] = factor * (data[i + 2] - 128) + 128;
+        function resetCurrentPage() {
+            const page = pages.find(p => p.id === currentPageId);
+            if (page) {
+                page.processedImage = page.originalImage;
+                page.activeFilter = 'none';
+                page.overlays = [];
+                setCurrentPage(page.id);
+                renderThumbnails();
             }
-            tempCtx.putImageData(imageData, 0, 0);
-
-            const img = new Image();
-            img.onload = () => {
-                displayImage(img);
-                // Note: This replaces the `currentImage`. We might want a non-destructive way later.
-            };
-            img.src = tempCanvas.toDataURL();
         }
 
-        function applyGrayscale() {
-            if (!currentImage) return;
-            const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = currentImage.width;
-            tempCanvas.height = currentImage.height;
-            const tempCtx = tempCanvas.getContext('2d');
-            tempCtx.drawImage(currentImage, 0, 0);
-            const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
-            const data = imageData.data;
-            for (let i = 0; i < data.length; i += 4) {
-                const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
-                data[i] = avg;
-                data[i + 1] = avg;
-                data[i + 2] = avg;
-            }
-            tempCtx.putImageData(imageData, 0, 0);
-            const img = new Image();
-            img.onload = () => {
-                currentImage = img;
-                displayImage(img);
-            };
-            img.src = tempCanvas.toDataURL();
+        // --- Thumbnail Rendering ---
+        function renderThumbnails() {
+            thumbnailStrip.innerHTML = '';
+            pages.forEach((page, index) => {
+                const thumbWrapper = document.createElement('div');
+                thumbWrapper.className = `thumbnail relative rounded-lg overflow-hidden w-24 h-32 flex-shrink-0 ${page.id === currentPageId ? 'active' : ''}`;
+                thumbWrapper.dataset.id = page.id;
+                thumbWrapper.onclick = () => setCurrentPage(page.id);
+                const thumbCanvas = document.createElement('canvas');
+                const thumbCtx = thumbCanvas.getContext('2d');
+                thumbWrapper.appendChild(thumbCanvas);
+                thumbCanvas.width = 96; thumbCanvas.height = 128;
+                thumbCtx.filter = page.activeFilter;
+                thumbCtx.drawImage(page.processedImage, 0, 0, 96, 128);
+
+                // Render overlays on thumbnail
+                const scaleX = 96 / page.processedImage.width;
+                const scaleY = 128 / page.processedImage.height;
+                page.overlays.forEach(overlay => {
+                    if (overlay.type === 'text') {
+                        thumbCtx.font = `${overlay.size * scaleY}px sans-serif`;
+                        thumbCtx.fillStyle = 'black';
+                        thumbCtx.fillText(overlay.text, overlay.x * scaleX, overlay.y * scaleY);
+                    } else if (overlay.type === 'highlight') {
+                        thumbCtx.fillStyle = 'rgba(255, 255, 0, 0.4)';
+                        thumbCtx.fillRect(overlay.x * scaleX, overlay.y * scaleY, overlay.width * scaleX, overlay.height * scaleY);
+                    }
+                });
+
+                const pageNum = document.createElement('div');
+                pageNum.className = 'absolute bottom-1 left-1 bg-black bg-opacity-50 text-white text-xs px-1 rounded';
+                pageNum.textContent = index + 1;
+                thumbWrapper.appendChild(pageNum);
+                const deleteBtn = document.createElement('div');
+                deleteBtn.className = 'delete-page-btn';
+                deleteBtn.innerHTML = '&times;';
+                deleteBtn.onclick = (e) => { e.stopPropagation(); deletePage(page.id); };
+                thumbWrapper.appendChild(deleteBtn);
+                thumbnailStrip.appendChild(thumbWrapper);
+            });
         }
 
-        function applyMagicColor() {
-            // A preset for higher contrast and slight saturation boost
-            brightnessSlider.value = 10;
-            contrastSlider.value = 50;
-            applyFilters(true); // Apply immediately
-
-            const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = currentImage.width;
-            tempCanvas.height = currentImage.height;
-            const tempCtx = tempCanvas.getContext('2d');
-            tempCtx.filter = `contrast(1.5) brightness(1.1) saturate(1.2)`;
-            tempCtx.drawImage(currentImage, 0, 0);
-
-            const img = new Image();
-            img.onload = () => {
-                currentImage = img;
-                displayImage(img);
-            };
-            img.src = tempCanvas.toDataURL();
+        // --- Annotation Tools ---
+        function getMousePos(canvasDom, mouseEvent) {
+            const rect = canvasDom.getBoundingClientRect();
+            const event = mouseEvent.touches ? mouseEvent.touches[0] : mouseEvent;
+            return [event.clientX - rect.left, event.clientY - rect.top];
         }
 
-        function resetAll() {
-            if (!originalImage) return;
-            currentImage = originalImage;
-            brightnessSlider.value = 0;
-            contrastSlider.value = 0;
-            brightnessValue.textContent = '0';
-            contrastValue.textContent = '0';
-            displayImage(originalImage);
+        function onCanvasClick(e) {
+            if (currentTool !== 'text') return;
+            const text = prompt("Enter text to add:");
+            if (!text) return;
+            const page = pages.find(p => p.id === currentPageId);
+            if (!page) return;
+
+            const [x, y] = getMousePos(canvas, e);
+            const scaleX = page.processedImage.width / canvas.width;
+            const scaleY = page.processedImage.height / canvas.height;
+
+            const overlay = { type: 'text', text, x: x * scaleX, y: y * scaleY, size: 24 };
+            page.overlays.push(overlay);
+            drawOverlay(); renderThumbnails();
+        }
+
+        function onCanvasMouseDown(e) {
+            if (currentTool !== 'highlight') return;
+            isDrawingHighlight = true;
+            [highlightStartX, highlightStartY] = getMousePos(canvas, e);
+        }
+        function onCanvasMouseMove(e) {
+            if (!isDrawingHighlight) return;
+            drawOverlay(); // Redraw to clear previous rect
+            const [currentX, currentY] = getMousePos(canvas, e);
+            ctx.fillStyle = 'rgba(255, 255, 0, 0.4)';
+            ctx.fillRect(highlightStartX, highlightStartY, currentX - highlightStartX, currentY - highlightStartY);
+        }
+        function onCanvasMouseUp(e) {
+            if (!isDrawingHighlight) return;
+            isDrawingHighlight = false;
+            const page = pages.find(p => p.id === currentPageId);
+            if (!page) return;
+
+            const [endX, endY] = getMousePos(canvas, e);
+            const scaleX = page.processedImage.width / canvas.width;
+            const scaleY = page.processedImage.height / canvas.height;
+
+            const overlay = {
+                type: 'highlight',
+                x: Math.min(highlightStartX, endX) * scaleX,
+                y: Math.min(highlightStartY, endY) * scaleY,
+                width: Math.abs(endX - highlightStartX) * scaleX,
+                height: Math.abs(endY - highlightStartY) * scaleY
+            };
+            page.overlays.push(overlay);
+            drawOverlay(); renderThumbnails();
         }
 
         // --- Export ---
+        function getPageAsDataURL(page, type = 'image/jpeg') {
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = page.processedImage.width;
+            tempCanvas.height = page.processedImage.height;
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCtx.filter = page.activeFilter;
+            tempCtx.drawImage(page.processedImage, 0, 0);
+            page.overlays.forEach(overlay => {
+                if (overlay.type === 'text') {
+                    tempCtx.font = `${overlay.size}px sans-serif`;
+                    tempCtx.fillStyle = 'black';
+                    tempCtx.fillText(overlay.text, overlay.x, overlay.y);
+                } else if (overlay.type === 'highlight') {
+                    tempCtx.fillStyle = 'rgba(255, 255, 0, 0.4)';
+                    tempCtx.fillRect(overlay.x, overlay.y, overlay.width, overlay.height);
+                }
+            });
+            const quality = parseInt(qualitySlider.value) / 100;
+            return tempCanvas.toDataURL(type, quality);
+        }
+
         function downloadJpg() {
-            if (!currentImage) return;
+            const page = pages.find(p => p.id === currentPageId);
+            if (!page) return;
+            const dataUrl = getPageAsDataURL(page, 'image/jpeg');
             const link = document.createElement('a');
-            link.download = 'scan.jpg';
-            link.href = canvas.toDataURL('image/jpeg', 0.9);
+            link.download = `scan-page-${pages.indexOf(page) + 1}.jpg`;
+            link.href = dataUrl;
             link.click();
         }
 
-        function downloadPdf() {
-            if (!currentImage) return;
+        async function downloadZip() {
+            if (pages.length === 0) return;
+            showLoader(true, 'Zipping files...');
+            const zip = new JSZip();
+            for (let i = 0; i < pages.length; i++) {
+                const page = pages[i];
+                const dataUrl = getPageAsDataURL(page, 'image/jpeg');
+                const base64Data = dataUrl.split(',')[1];
+                zip.file(`page-${i + 1}.jpg`, base64Data, { base64: true });
+            }
+            const content = await zip.generateAsync({ type: 'blob' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(content);
+            link.download = 'scanned-document.zip';
+            link.click();
+            URL.revokeObjectURL(link.href);
+            showLoader(false);
+        }
+
+        async function downloadPdf() {
+            if (pages.length === 0) return;
             const { jsPDF } = window.jspdf;
-            const imgData = canvas.toDataURL('image/jpeg', 0.9);
-
-            // Create PDF with dimensions matching the image aspect ratio
-            const pdf = new jsPDF({
-                orientation: canvas.width > canvas.height ? 'l' : 'p',
-                unit: 'px',
-                format: [canvas.width, canvas.height]
-            });
-
-            pdf.addImage(imgData, 'JPEG', 0, 0, canvas.width, canvas.height);
-            pdf.save('scan.pdf');
+            const password = pdfPasswordInput.value;
+            const pdfOptions = password ? { userPassword: password } : {};
+            const pdf = new jsPDF(pdfOptions);
+            showLoader(true, 'Creating PDF...');
+            for (let i = 0; i < pages.length; i++) {
+                const page = pages[i];
+                const imgData = getPageAsDataURL(page, 'image/jpeg');
+                const tempImg = new Image();
+                await new Promise(resolve => {
+                    tempImg.onload = () => {
+                        const pdfWidth = pdf.internal.pageSize.getWidth();
+                        const pdfHeight = pdf.internal.pageSize.getHeight();
+                        const imgAspectRatio = tempImg.width / tempImg.height;
+                        const pdfAspectRatio = pdfWidth / pdfHeight;
+                        let imgPdfWidth = pdfWidth, imgPdfHeight = pdfHeight;
+                        if (imgAspectRatio > pdfAspectRatio) { imgPdfHeight = pdfWidth / imgAspectRatio; } else { imgPdfWidth = pdfHeight * imgAspectRatio; }
+                        const x = (pdfWidth - imgPdfWidth) / 2;
+                        const y = (pdfHeight - imgPdfHeight) / 2;
+                        if (i > 0) pdf.addPage();
+                        pdf.addImage(imgData, 'JPEG', x, y, imgPdfWidth, imgPdfHeight);
+                        resolve();
+                    };
+                    tempImg.src = imgData;
+                });
+            }
+            pdf.save('scanned-document.pdf');
+            showLoader(false);
         }
 
         // --- Utility ---
-        function showLoader(show) {
-            loader.classList.toggle('hidden', !show);
+        function showLoader(show, text = 'Processing...') {
+            loader.style.display = show ? 'flex' : 'none';
+            loaderText.textContent = text;
         }
 
         // --- Perspective Warp Logic ---
-        // This is a complex part. We'll use a simplified version.
-        // For a perfect warp, a library like OpenCV.js would be better.
         function perspectiveWarp(img, srcCorners, outWidth, outHeight) {
             const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = outWidth;
-            tempCanvas.height = outHeight;
+            tempCanvas.width = outWidth; tempCanvas.height = outHeight;
             const tempCtx = tempCanvas.getContext('2d');
-
             const src = srcCorners;
-            const dst = [
-                { x: 0, y: 0 },
-                { x: outWidth, y: 0 },
-                { x: outWidth, y: outHeight },
-                { x: 0, y: outHeight }
-            ];
-
-            // Compute the perspective transform matrix
+            const dst = [{ x: 0, y: 0 }, { x: outWidth, y: 0 }, { x: outWidth, y: outHeight }, { x: 0, y: outHeight }];
             const transform = getTransform(src, dst);
-
-            // Create a temporary canvas to draw the source image
             const srcCanvas = document.createElement('canvas');
-            srcCanvas.width = img.width;
-            srcCanvas.height = img.height;
-            const srcCtx = srcCanvas.getContext('2d');
-            srcCtx.drawImage(img, 0, 0);
-            const srcData = srcCtx.getImageData(0, 0, img.width, img.height);
-
+            srcCanvas.width = img.width; srcCanvas.height = img.height;
+            srcCanvas.getContext('2d').drawImage(img, 0, 0);
+            const srcData = srcCanvas.getContext('2d').getImageData(0, 0, img.width, img.height);
             const outData = tempCtx.createImageData(outWidth, outHeight);
-
-            // Apply the transform
             for (let y = 0; y < outHeight; y++) {
                 for (let x = 0; x < outWidth; x++) {
-                    // Apply inverse transform to find corresponding src pixel
                     const srcPoint = applyTransform(x, y, transform.inverse);
-                    const srcX = Math.round(srcPoint.x);
-                    const srcY = Math.round(srcPoint.y);
-
+                    const srcX = Math.round(srcPoint.x), srcY = Math.round(srcPoint.y);
                     if (srcX >= 0 && srcX < img.width && srcY >= 0 && srcY < img.height) {
                         const srcIdx = (srcY * img.width + srcX) * 4;
                         const dstIdx = (y * outWidth + x) * 4;
-                        outData.data[dstIdx] = srcData.data[srcIdx];
-                        outData.data[dstIdx + 1] = srcData.data[srcIdx + 1];
-                        outData.data[dstIdx + 2] = srcData.data[srcIdx + 2];
-                        outData.data[dstIdx + 3] = srcData.data[srcIdx + 3];
+                        outData.data.set(srcData.data.subarray(srcIdx, srcIdx + 4), dstIdx);
                     }
                 }
             }
             tempCtx.putImageData(outData, 0, 0);
             return tempCanvas.toDataURL();
         }
-
         function applyTransform(x, y, m) {
             const z = m[6] * x + m[7] * y + 1;
-            return {
-                x: (m[0] * x + m[1] * y + m[2]) / z,
-                y: (m[3] * x + m[4] * y + m[5]) / z
-            };
+            return { x: (m[0] * x + m[1] * y + m[2]) / z, y: (m[3] * x + m[4] * y + m[5]) / z };
         }
-
         function getTransform(src, dst) {
             const P = [
                 [src[0].x, src[0].y, 1, 0, 0, 0, -src[0].x * dst[0].x, -src[0].y * dst[0].x],
                 [0, 0, 0, src[0].x, src[0].y, 1, -src[0].x * dst[0].y, -src[0].y * dst[0].y],
                 [src[1].x, src[1].y, 1, 0, 0, 0, -src[1].x * dst[1].x, -src[1].y * dst[1].x],
                 [0, 0, 0, src[1].x, src[1].y, 1, -src[1].x * dst[1].y, -src[1].y * dst[1].y],
-                [src[2].x, src[2].y, 1, 0, 0, 0, -src[2].x * dst[2].x, -src[2].y * dst[2].x],
+                [src[2].x, src[2].y, 1, 0, 0, 0, -src[2].x * dst[2].x, -src[2].y * dst[2].y],
                 [0, 0, 0, src[2].x, src[2].y, 1, -src[2].x * dst[2].y, -src[2].y * dst[2].y],
                 [src[3].x, src[3].y, 1, 0, 0, 0, -src[3].x * dst[3].x, -src[3].y * dst[3].x],
                 [0, 0, 0, src[3].x, src[3].y, 1, -src[3].x * dst[3].y, -src[3].y * dst[3].y]
@@ -655,60 +1104,33 @@
             const V = [dst[0].x, dst[0].y, dst[1].x, dst[1].y, dst[2].x, dst[2].y, dst[3].x, dst[3].y];
             const C = solve(P, V);
             const matrix = [C[0], C[1], C[2], C[3], C[4], C[5], C[6], C[7], 1];
-            const inverse = getInverse(matrix);
+            const invDet = 1 / (matrix[0] * (matrix[4] * matrix[8] - matrix[5] * matrix[7]) - matrix[1] * (matrix[3] * matrix[8] - matrix[5] * matrix[6]) + matrix[2] * (matrix[3] * matrix[7] - matrix[4] * matrix[6]));
+            const inverse = [
+                (matrix[4] * matrix[8] - matrix[5] * matrix[7]) * invDet, (matrix[2] * matrix[7] - matrix[1] * matrix[8]) * invDet, (matrix[1] * matrix[5] - matrix[2] * matrix[4]) * invDet,
+                (matrix[5] * matrix[6] - matrix[3] * matrix[8]) * invDet, (matrix[0] * matrix[8] - matrix[2] * matrix[6]) * invDet, (matrix[2] * matrix[3] - matrix[0] * matrix[5]) * invDet,
+                (matrix[3] * matrix[7] - matrix[4] * matrix[6]) * invDet, (matrix[1] * matrix[6] - matrix[0] * matrix[7]) * invDet, (matrix[0] * matrix[4] - matrix[1] * matrix[3]) * invDet
+            ];
             return { forward: matrix, inverse: inverse };
         }
-
-        // Gaussian elimination to solve linear system Ax=b
         function solve(A, b) {
             const n = A.length;
             for (let i = 0; i < n; i++) {
-                let maxEl = Math.abs(A[i][i]);
                 let maxRow = i;
+                for (let k = i + 1; k < n; k++) if (Math.abs(A[k][i]) > Math.abs(A[maxRow][i])) maxRow = k;
+                [A[i], A[maxRow]] = [A[maxRow], A[i]];
+                [b[i], b[maxRow]] = [b[maxRow], b[i]];
                 for (let k = i + 1; k < n; k++) {
-                    if (Math.abs(A[k][i]) > maxEl) {
-                        maxEl = Math.abs(A[k][i]);
-                        maxRow = k;
-                    }
-                }
-                for (let k = i; k < n; k++) {
-                    let tmp = A[maxRow][k];
-                    A[maxRow][k] = A[i][k];
-                    A[i][k] = tmp;
-                }
-                let tmp = b[maxRow];
-                b[maxRow] = b[i];
-                b[i] = tmp;
-                for (let k = i + 1; k < n; k++) {
-                    let c = -A[k][i] / A[i][i];
-                    for (let j = i; j < n; j++) {
-                        if (i === j) A[k][j] = 0;
-                        else A[k][j] += c * A[i][j];
-                    }
+                    const c = -A[k][i] / A[i][i];
+                    for (let j = i; j < n; j++) if (i === j) A[k][j] = 0; else A[k][j] += c * A[i][j];
                     b[k] += c * b[i];
                 }
             }
             const x = new Array(n);
             for (let i = n - 1; i > -1; i--) {
                 x[i] = b[i] / A[i][i];
-                for (let k = i - 1; k > -1; k--) {
-                    b[k] -= A[k][i] * x[i];
-                }
+                for (let k = i - 1; k > -1; k--) b[k] -= A[k][i] * x[i];
             }
             return x;
-        }
-
-        function getInverse(M) {
-            const a = M[0], b = M[1], c = M[2];
-            const d = M[3], e = M[4], f = M[5];
-            const g = M[6], h = M[7], i = M[8];
-            const det = a * (e * i - f * h) - b * (d * i - f * g) + c * (d * h - e * g);
-            const invDet = 1 / det;
-            return [
-                (e * i - f * h) * invDet, (c * h - b * i) * invDet, (b * f - c * e) * invDet,
-                (f * g - d * i) * invDet, (a * i - c * g) * invDet, (c * d - a * f) * invDet,
-                (d * h - e * g) * invDet, (b * g - a * h) * invDet, (a * e - b * d) * invDet
-            ];
         }
 
         // --- Run ---
