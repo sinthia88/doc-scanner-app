@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DocScanner - Web-based Document Scanner</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- jsPDF for PDF export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <!-- Draggable library for corner points -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.11.5/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.11.5/Draggable.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #3b82f6;
+            --secondary-color: #1f2937;
+            --background-color: #f9fafb;
+            --card-background: #ffffff;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--background-color);
+        }
+
+        .corner-handle {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background-color: rgba(59, 130, 246, 0.7);
+            border-radius: 50%;
+            border: 2px solid white;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+            cursor: move;
+            touch-action: none;
+            /* Prevent scrolling on touch devices */
+        }
+
+        .corner-handle:hover {
+            transform: scale(1.2);
+        }
+
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid var(--primary-color);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .tab-button.active {
+            background-color: var(--primary-color);
+            color: white;
+        }
+    </style>
+</head>
+
+<body class="text-gray-800">
+
+    <div class="container mx-auto p-4 max-w-7xl">
+        <!-- Header -->
+        <header class="text-center mb-6">
+            <h1 class="text-4xl font-bold text-gray-900">DocScanner</h1>
+            <p class="text-lg text-gray-600 mt-2">A simple, powerful document scanner in your browser.</p>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <!-- Left Column: Input & Controls -->
+            <div class="bg-white p-6 rounded-2xl shadow-lg">
+                <h2 class="text-2xl font-semibold mb-4 border-b pb-2">1. Get Your Image</h2>
+
+                <!-- Tab Controls for Input -->
+                <div class="flex border border-gray-200 rounded-lg mb-4">
+                    <button id="tab-upload"
+                        class="tab-button flex-1 p-3 rounded-l-lg font-medium transition-colors duration-200">Upload
+                        File</button>
+                    <button id="tab-camera"
+                        class="tab-button flex-1 p-3 rounded-r-lg font-medium transition-colors duration-200">Use
+                        Camera</button>
+                </div>
+
+                <!-- Upload Section -->
+                <div id="upload-section">
+                    <label for="image-upload"
+                        class="w-full cursor-pointer bg-blue-50 hover:bg-blue-100 border-2 border-dashed border-blue-300 rounded-lg p-8 text-center block">
+                        <svg class="mx-auto h-12 w-12 text-blue-400" stroke="currentColor" fill="none"
+                            viewBox="0 0 48 48" aria-hidden="true">
+                            <path
+                                d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+                        </svg>
+                        <span class="mt-2 block text-sm font-semibold text-blue-600">Click to upload an image</span>
+                        <span class="mt-1 block text-xs text-gray-500">PNG, JPG, WEBP up to 10MB</span>
+                    </label>
+                    <input type="file" id="image-upload" class="hidden" accept="image/*">
+                </div>
+
+                <!-- Camera Section -->
+                <div id="camera-section" class="hidden">
+                    <video id="video-feed" class="w-full rounded-lg bg-gray-900" playsinline></video>
+                    <div class="flex justify-center space-x-4 mt-4">
+                        <button id="start-camera"
+                            class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition-transform transform hover:scale-105">Start
+                            Camera</button>
+                        <button id="capture-photo"
+                            class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition-transform transform hover:scale-105"
+                            disabled>Capture</button>
+                    </div>
+                </div>
+
+                <!-- Controls Section -->
+                <div id="controls-section" class="mt-6 hidden">
+                    <h2 class="text-2xl font-semibold mb-4 border-b pb-2">2. Adjust & Enhance</h2>
+                    <div class="space-y-4">
+                        <button id="detect-edges"
+                            class="w-full bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg transition-transform transform hover:scale-105">Apply
+                            Perspective Correction</button>
+
+                        <div>
+                            <label for="brightness" class="font-medium">Brightness: <span
+                                    id="brightness-value">0</span></label>
+                            <input type="range" id="brightness" min="-100" max="100" value="0"
+                                class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                        </div>
+                        <div>
+                            <label for="contrast" class="font-medium">Contrast: <span
+                                    id="contrast-value">0</span></label>
+                            <input type="range" id="contrast" min="-100" max="100" value="0"
+                                class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4 pt-2">
+                            <button id="grayscale"
+                                class="filter-btn bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg">Grayscale</button>
+                            <button id="magic-color"
+                                class="filter-btn bg-purple-500 hover:bg-purple-600 text-white font-bold py-2 px-4 rounded-lg">Magic
+                                Color</button>
+                            <button id="reset-filters"
+                                class="col-span-2 bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg">Reset
+                                All</button>
+                        </div>
+                    </div>
+
+                    <h2 class="text-2xl font-semibold mt-8 mb-4 border-b pb-2">3. Export</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <button id="download-jpg"
+                            class="bg-teal-500 hover:bg-teal-600 text-white font-bold py-3 px-4 rounded-lg transition-transform transform hover:scale-105">Download
+                            JPG</button>
+                        <button id="download-pdf"
+                            class="bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 px-4 rounded-lg transition-transform transform hover:scale-105">Download
+                            PDF</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Image Preview -->
+            <div class="bg-white p-6 rounded-2xl shadow-lg relative min-h-[400px] flex items-center justify-center">
+                <div id="image-container" class="relative w-full h-full max-w-full max-h-full overflow-auto">
+                    <canvas id="canvas" class="rounded-lg shadow-md"></canvas>
+                    <!-- Corner handles will be injected here by JS -->
+                </div>
+                <div id="placeholder-text" class="text-gray-400 text-center">
+                    <svg class="mx-auto h-24 w-24 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                        xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1"
+                            d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z">
+                        </path>
+                    </svg>
+                    <p class="mt-2 font-medium">Your image will appear here</p>
+                </div>
+                <div id="loader" class="absolute hidden">
+                    <div class="loader"></div>
+                    <p class="mt-4 font-semibold text-gray-600">Processing...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // DOM Elements
+        const tabUpload = document.getElementById('tab-upload');
+        const tabCamera = document.getElementById('tab-camera');
+        const uploadSection = document.getElementById('upload-section');
+        const cameraSection = document.getElementById('camera-section');
+        const imageUpload = document.getElementById('image-upload');
+        const videoFeed = document.getElementById('video-feed');
+        const startCameraBtn = document.getElementById('start-camera');
+        const capturePhotoBtn = document.getElementById('capture-photo');
+        const controlsSection = document.getElementById('controls-section');
+        const imageContainer = document.getElementById('image-container');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const placeholderText = document.getElementById('placeholder-text');
+        const loader = document.getElementById('loader');
+
+        // Control Buttons
+        const detectEdgesBtn = document.getElementById('detect-edges');
+        const brightnessSlider = document.getElementById('brightness');
+        const contrastSlider = document.getElementById('contrast');
+        const grayscaleBtn = document.getElementById('grayscale');
+        const magicColorBtn = document.getElementById('magic-color');
+        const resetFiltersBtn = document.getElementById('reset-filters');
+        const downloadJpgBtn = document.getElementById('download-jpg');
+        const downloadPdfBtn = document.getElementById('download-pdf');
+
+        // Value Displays
+        const brightnessValue = document.getElementById('brightness-value');
+        const contrastValue = document.getElementById('contrast-value');
+
+        // State variables
+        let originalImage = null;
+        let currentImage = null;
+        let stream = null;
+        let cornerHandles = [];
+        let draggableInstances = [];
+
+        // --- Initialization ---
+        function init() {
+            setupTabs();
+            setupEventListeners();
+            gsap.registerPlugin(Draggable);
+        }
+
+        function setupTabs() {
+            tabUpload.classList.add('active');
+            tabUpload.addEventListener('click', () => switchTab('upload'));
+            tabCamera.addEventListener('click', () => switchTab('camera'));
+        }
+
+        function switchTab(tabName) {
+            if (tabName === 'upload') {
+                tabUpload.classList.add('active');
+                tabCamera.classList.remove('active');
+                uploadSection.classList.remove('hidden');
+                cameraSection.classList.add('hidden');
+                stopCamera();
+            } else {
+                tabCamera.classList.add('active');
+                tabUpload.classList.remove('active');
+                cameraSection.classList.remove('hidden');
+                uploadSection.classList.add('hidden');
+            }
+        }
+
+        function setupEventListeners() {
+            imageUpload.addEventListener('change', handleImageUpload);
+            startCameraBtn.addEventListener('click', startCamera);
+            capturePhotoBtn.addEventListener('click', capturePhoto);
+            detectEdgesBtn.addEventListener('click', applyPerspectiveTransform);
+            brightnessSlider.addEventListener('input', () => applyFilters(false));
+            contrastSlider.addEventListener('input', () => applyFilters(false));
+            grayscaleBtn.addEventListener('click', applyGrayscale);
+            magicColorBtn.addEventListener('click', applyMagicColor);
+            resetFiltersBtn.addEventListener('click', resetAll);
+            downloadJpgBtn.addEventListener('click', downloadJpg);
+            downloadPdfBtn.addEventListener('click', downloadPdf);
+        }
+
+        // --- Image Input ---
+        function handleImageUpload(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        originalImage = img;
+                        currentImage = img;
+                        displayImage(img);
+                    };
+                    img.src = event.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        async function startCamera() {
+            try {
+                if (stream) {
+                    stopCamera();
+                    return;
+                }
+                stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+                videoFeed.srcObject = stream;
+                videoFeed.play();
+                startCameraBtn.textContent = 'Stop Camera';
+                startCameraBtn.classList.replace('bg-green-500', 'bg-red-500');
+                startCameraBtn.classList.replace('hover:bg-green-600', 'hover:bg-red-600');
+                capturePhotoBtn.disabled = false;
+            } catch (err) {
+                console.error("Error accessing camera:", err);
+                alert("Could not access the camera. Please ensure you have given permission.");
+            }
+        }
+
+        function stopCamera() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+                videoFeed.srcObject = null;
+                startCameraBtn.textContent = 'Start Camera';
+                startCameraBtn.classList.replace('bg-red-500', 'bg-green-500');
+                startCameraBtn.classList.replace('hover:bg-red-600', 'hover:bg-green-600');
+                capturePhotoBtn.disabled = true;
+            }
+        }
+
+        function capturePhoto() {
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = videoFeed.videoWidth;
+            tempCanvas.height = videoFeed.videoHeight;
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCtx.drawImage(videoFeed, 0, 0, tempCanvas.width, tempCanvas.height);
+
+            const img = new Image();
+            img.onload = () => {
+                originalImage = img;
+                currentImage = img;
+                displayImage(img);
+                stopCamera();
+            };
+            img.src = tempCanvas.toDataURL('image/webp');
+        }
+
+        // --- Image Display and Manipulation ---
+        function displayImage(img) {
+            placeholderText.classList.add('hidden');
+            controlsSection.classList.remove('hidden');
+
+            // Resize canvas to fit container while maintaining aspect ratio
+            const containerWidth = imageContainer.clientWidth;
+            const containerHeight = imageContainer.clientHeight;
+            const imgAspectRatio = img.width / img.height;
+
+            let newWidth = containerWidth;
+            let newHeight = newWidth / imgAspectRatio;
+
+            if (newHeight > containerHeight) {
+                newHeight = containerHeight;
+                newWidth = newHeight * imgAspectRatio;
+            }
+
+            canvas.width = newWidth;
+            canvas.height = newHeight;
+
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            createCornerHandles();
+        }
+
+        function createCornerHandles() {
+            // Clear existing handles
+            cornerHandles.forEach(h => h.remove());
+            draggableInstances.forEach(d => d.kill());
+            cornerHandles = [];
+            draggableInstances = [];
+
+            const padding = 10;
+            const positions = [
+                { x: padding, y: padding }, // Top-left
+                { x: canvas.width - padding, y: padding }, // Top-right
+                { x: canvas.width - padding, y: canvas.height - padding }, // Bottom-right
+                { x: padding, y: canvas.height - padding } // Bottom-left
+            ];
+
+            positions.forEach((pos, i) => {
+                const handle = document.createElement('div');
+                handle.className = 'corner-handle';
+                handle.id = `handle-${i}`;
+                imageContainer.appendChild(handle);
+                gsap.set(handle, { x: pos.x - 10, y: pos.y - 10 }); // Center handle on position
+                cornerHandles.push(handle);
+
+                const dragInstance = Draggable.create(handle, {
+                    bounds: canvas,
+                    onDrag: () => drawOverlay(),
+                    onPress: () => drawOverlay()
+                })[0];
+                draggableInstances.push(dragInstance);
+            });
+            drawOverlay();
+        }
+
+        function drawOverlay() {
+            // Redraw image to clear previous overlay
+            ctx.drawImage(currentImage, 0, 0, canvas.width, canvas.height);
+
+            if (cornerHandles.length !== 4) return;
+
+            const points = cornerHandles.map(h => ({
+                x: gsap.getProperty(h, "x") + 10,
+                y: gsap.getProperty(h, "y") + 10
+            }));
+
+            ctx.beginPath();
+            ctx.moveTo(points[0].x, points[0].y);
+            for (let i = 1; i < points.length; i++) {
+                ctx.lineTo(points[i].x, points[i].y);
+            }
+            ctx.closePath();
+
+            ctx.fillStyle = 'rgba(59, 130, 246, 0.2)';
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(59, 130, 246, 1)';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
+
+        function applyPerspectiveTransform() {
+            if (!currentImage || cornerHandles.length !== 4) return;
+
+            showLoader(true);
+
+            // Using a timeout to allow the UI to update and show the loader
+            setTimeout(() => {
+                const cornerPoints = cornerHandles.map(h => ({
+                    x: (gsap.getProperty(h, "x") + 10) * (originalImage.width / canvas.width),
+                    y: (gsap.getProperty(h, "y") + 10) * (originalImage.height / canvas.height)
+                }));
+
+                const [tl, tr, br, bl] = cornerPoints;
+
+                // Calculate the dimensions of the new image
+                const widthA = Math.sqrt(Math.pow(br.x - bl.x, 2) + Math.pow(br.y - bl.y, 2));
+                const widthB = Math.sqrt(Math.pow(tr.x - tl.x, 2) + Math.pow(tr.y - tl.y, 2));
+                const maxWidth = Math.max(widthA, widthB);
+
+                const heightA = Math.sqrt(Math.pow(tr.x - br.x, 2) + Math.pow(tr.y - br.y, 2));
+                const heightB = Math.sqrt(Math.pow(tl.x - bl.x, 2) + Math.pow(tl.y - bl.y, 2));
+                const maxHeight = Math.max(heightA, heightB);
+
+                const transformedImage = perspectiveWarp(originalImage, cornerPoints, maxWidth, maxHeight);
+
+                const img = new Image();
+                img.onload = () => {
+                    currentImage = img;
+                    displayImage(img);
+                    showLoader(false);
+                };
+                img.src = transformedImage;
+            }, 50);
+        }
+
+        // --- Image Filters ---
+        function applyFilters(fromButton = true) {
+            if (!currentImage) return;
+
+            // Update value displays
+            brightnessValue.textContent = brightnessSlider.value;
+            contrastValue.textContent = contrastSlider.value;
+
+            if (fromButton) return; // Debounce for sliders
+
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = currentImage.width;
+            tempCanvas.height = currentImage.height;
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCtx.drawImage(currentImage, 0, 0);
+
+            const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+            const data = imageData.data;
+            const brightness = parseInt(brightnessSlider.value);
+            const contrast = parseInt(contrastSlider.value);
+            const factor = (259 * (contrast + 255)) / (255 * (259 - contrast));
+
+            for (let i = 0; i < data.length; i += 4) {
+                // Brightness
+                data[i] += brightness;
+                data[i + 1] += brightness;
+                data[i + 2] += brightness;
+
+                // Contrast
+                data[i] = factor * (data[i] - 128) + 128;
+                data[i + 1] = factor * (data[i + 1] - 128) + 128;
+                data[i + 2] = factor * (data[i + 2] - 128) + 128;
+            }
+            tempCtx.putImageData(imageData, 0, 0);
+
+            const img = new Image();
+            img.onload = () => {
+                displayImage(img);
+                // Note: This replaces the `currentImage`. We might want a non-destructive way later.
+            };
+            img.src = tempCanvas.toDataURL();
+        }
+
+        function applyGrayscale() {
+            if (!currentImage) return;
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = currentImage.width;
+            tempCanvas.height = currentImage.height;
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCtx.drawImage(currentImage, 0, 0);
+            const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+            const data = imageData.data;
+            for (let i = 0; i < data.length; i += 4) {
+                const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
+                data[i] = avg;
+                data[i + 1] = avg;
+                data[i + 2] = avg;
+            }
+            tempCtx.putImageData(imageData, 0, 0);
+            const img = new Image();
+            img.onload = () => {
+                currentImage = img;
+                displayImage(img);
+            };
+            img.src = tempCanvas.toDataURL();
+        }
+
+        function applyMagicColor() {
+            // A preset for higher contrast and slight saturation boost
+            brightnessSlider.value = 10;
+            contrastSlider.value = 50;
+            applyFilters(true); // Apply immediately
+
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = currentImage.width;
+            tempCanvas.height = currentImage.height;
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCtx.filter = `contrast(1.5) brightness(1.1) saturate(1.2)`;
+            tempCtx.drawImage(currentImage, 0, 0);
+
+            const img = new Image();
+            img.onload = () => {
+                currentImage = img;
+                displayImage(img);
+            };
+            img.src = tempCanvas.toDataURL();
+        }
+
+        function resetAll() {
+            if (!originalImage) return;
+            currentImage = originalImage;
+            brightnessSlider.value = 0;
+            contrastSlider.value = 0;
+            brightnessValue.textContent = '0';
+            contrastValue.textContent = '0';
+            displayImage(originalImage);
+        }
+
+        // --- Export ---
+        function downloadJpg() {
+            if (!currentImage) return;
+            const link = document.createElement('a');
+            link.download = 'scan.jpg';
+            link.href = canvas.toDataURL('image/jpeg', 0.9);
+            link.click();
+        }
+
+        function downloadPdf() {
+            if (!currentImage) return;
+            const { jsPDF } = window.jspdf;
+            const imgData = canvas.toDataURL('image/jpeg', 0.9);
+
+            // Create PDF with dimensions matching the image aspect ratio
+            const pdf = new jsPDF({
+                orientation: canvas.width > canvas.height ? 'l' : 'p',
+                unit: 'px',
+                format: [canvas.width, canvas.height]
+            });
+
+            pdf.addImage(imgData, 'JPEG', 0, 0, canvas.width, canvas.height);
+            pdf.save('scan.pdf');
+        }
+
+        // --- Utility ---
+        function showLoader(show) {
+            loader.classList.toggle('hidden', !show);
+        }
+
+        // --- Perspective Warp Logic ---
+        // This is a complex part. We'll use a simplified version.
+        // For a perfect warp, a library like OpenCV.js would be better.
+        function perspectiveWarp(img, srcCorners, outWidth, outHeight) {
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = outWidth;
+            tempCanvas.height = outHeight;
+            const tempCtx = tempCanvas.getContext('2d');
+
+            const src = srcCorners;
+            const dst = [
+                { x: 0, y: 0 },
+                { x: outWidth, y: 0 },
+                { x: outWidth, y: outHeight },
+                { x: 0, y: outHeight }
+            ];
+
+            // Compute the perspective transform matrix
+            const transform = getTransform(src, dst);
+
+            // Create a temporary canvas to draw the source image
+            const srcCanvas = document.createElement('canvas');
+            srcCanvas.width = img.width;
+            srcCanvas.height = img.height;
+            const srcCtx = srcCanvas.getContext('2d');
+            srcCtx.drawImage(img, 0, 0);
+            const srcData = srcCtx.getImageData(0, 0, img.width, img.height);
+
+            const outData = tempCtx.createImageData(outWidth, outHeight);
+
+            // Apply the transform
+            for (let y = 0; y < outHeight; y++) {
+                for (let x = 0; x < outWidth; x++) {
+                    // Apply inverse transform to find corresponding src pixel
+                    const srcPoint = applyTransform(x, y, transform.inverse);
+                    const srcX = Math.round(srcPoint.x);
+                    const srcY = Math.round(srcPoint.y);
+
+                    if (srcX >= 0 && srcX < img.width && srcY >= 0 && srcY < img.height) {
+                        const srcIdx = (srcY * img.width + srcX) * 4;
+                        const dstIdx = (y * outWidth + x) * 4;
+                        outData.data[dstIdx] = srcData.data[srcIdx];
+                        outData.data[dstIdx + 1] = srcData.data[srcIdx + 1];
+                        outData.data[dstIdx + 2] = srcData.data[srcIdx + 2];
+                        outData.data[dstIdx + 3] = srcData.data[srcIdx + 3];
+                    }
+                }
+            }
+            tempCtx.putImageData(outData, 0, 0);
+            return tempCanvas.toDataURL();
+        }
+
+        function applyTransform(x, y, m) {
+            const z = m[6] * x + m[7] * y + 1;
+            return {
+                x: (m[0] * x + m[1] * y + m[2]) / z,
+                y: (m[3] * x + m[4] * y + m[5]) / z
+            };
+        }
+
+        function getTransform(src, dst) {
+            const P = [
+                [src[0].x, src[0].y, 1, 0, 0, 0, -src[0].x * dst[0].x, -src[0].y * dst[0].x],
+                [0, 0, 0, src[0].x, src[0].y, 1, -src[0].x * dst[0].y, -src[0].y * dst[0].y],
+                [src[1].x, src[1].y, 1, 0, 0, 0, -src[1].x * dst[1].x, -src[1].y * dst[1].x],
+                [0, 0, 0, src[1].x, src[1].y, 1, -src[1].x * dst[1].y, -src[1].y * dst[1].y],
+                [src[2].x, src[2].y, 1, 0, 0, 0, -src[2].x * dst[2].x, -src[2].y * dst[2].x],
+                [0, 0, 0, src[2].x, src[2].y, 1, -src[2].x * dst[2].y, -src[2].y * dst[2].y],
+                [src[3].x, src[3].y, 1, 0, 0, 0, -src[3].x * dst[3].x, -src[3].y * dst[3].x],
+                [0, 0, 0, src[3].x, src[3].y, 1, -src[3].x * dst[3].y, -src[3].y * dst[3].y]
+            ];
+            const V = [dst[0].x, dst[0].y, dst[1].x, dst[1].y, dst[2].x, dst[2].y, dst[3].x, dst[3].y];
+            const C = solve(P, V);
+            const matrix = [C[0], C[1], C[2], C[3], C[4], C[5], C[6], C[7], 1];
+            const inverse = getInverse(matrix);
+            return { forward: matrix, inverse: inverse };
+        }
+
+        // Gaussian elimination to solve linear system Ax=b
+        function solve(A, b) {
+            const n = A.length;
+            for (let i = 0; i < n; i++) {
+                let maxEl = Math.abs(A[i][i]);
+                let maxRow = i;
+                for (let k = i + 1; k < n; k++) {
+                    if (Math.abs(A[k][i]) > maxEl) {
+                        maxEl = Math.abs(A[k][i]);
+                        maxRow = k;
+                    }
+                }
+                for (let k = i; k < n; k++) {
+                    let tmp = A[maxRow][k];
+                    A[maxRow][k] = A[i][k];
+                    A[i][k] = tmp;
+                }
+                let tmp = b[maxRow];
+                b[maxRow] = b[i];
+                b[i] = tmp;
+                for (let k = i + 1; k < n; k++) {
+                    let c = -A[k][i] / A[i][i];
+                    for (let j = i; j < n; j++) {
+                        if (i === j) A[k][j] = 0;
+                        else A[k][j] += c * A[i][j];
+                    }
+                    b[k] += c * b[i];
+                }
+            }
+            const x = new Array(n);
+            for (let i = n - 1; i > -1; i--) {
+                x[i] = b[i] / A[i][i];
+                for (let k = i - 1; k > -1; k--) {
+                    b[k] -= A[k][i] * x[i];
+                }
+            }
+            return x;
+        }
+
+        function getInverse(M) {
+            const a = M[0], b = M[1], c = M[2];
+            const d = M[3], e = M[4], f = M[5];
+            const g = M[6], h = M[7], i = M[8];
+            const det = a * (e * i - f * h) - b * (d * i - f * g) + c * (d * h - e * g);
+            const invDet = 1 / det;
+            return [
+                (e * i - f * h) * invDet, (c * h - b * i) * invDet, (b * f - c * e) * invDet,
+                (f * g - d * i) * invDet, (a * i - c * g) * invDet, (c * d - a * f) * invDet,
+                (d * h - e * g) * invDet, (b * g - a * h) * invDet, (a * e - b * d) * invDet
+            ];
+        }
+
+        // --- Run ---
+        init();
+
+    </script>
+</body>
+
+</html>
